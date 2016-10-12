@@ -2,7 +2,7 @@
 
 import matplotlib.pyplot as plt
 
-f = open("C:/work/PycharmProjects/gradient_slide_cnn/model/2016090819_1000/log","r")
+f = open("C:/work/PycharmProjects/gradient_slide_cnn/model/2016100717_35t_1000/log","r")
 
 #f2 = open("C:/work/PycharmProjects/gradient_slide_cnn/model/2016090901_1000/log","r")
 
@@ -11,8 +11,8 @@ i = 0
 n = []
 line = f.readline()
 while(line):
-    if i % 8 == 6:
-        line = line[25:]
+    if i % 8 == 5:
+        line = line[35:-2]
         n.append(float(line))
     line = f.readline()
     i += 1

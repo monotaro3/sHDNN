@@ -105,7 +105,7 @@ def make_datasets(img_dir,bg_ratio): #フォルダからgroundtruthとbackground
     return vehicle_images,bg_images
 
 def main():
-    img_dir = "c:/work/vehicle_detection/images/train/"
+    img_dir = "C:/work/vehicle_detection/images/train/"
     print("making data...")
     vehicle_images,bg_images = make_datasets(img_dir,35)
     print("finished.")

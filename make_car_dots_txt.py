@@ -20,7 +20,9 @@ def checkrepeat(dots,dot):
         if i in dots:repeat = True
     return repeat
 
-img_dir = "c:/work/vehicle_detection/images/database/"
+
+img_dir = "C:/work/gspace_yangon/vehicle/test/"
+
 
 img_files = []
 tmp = os.listdir(img_dir)
@@ -69,10 +71,12 @@ for j in img_files:
             else:dots_round.append(i)
         else:dots_round.append(i)
 
-    for i in range(10):
-        print(img[dots[i][0],dots[i][1]])
-        print(dots[i])
-    len(dots)
+
+    # for i in range(10):
+    #     print(img[dots[i][0],dots[i][1]])
+    #     print(dots[i])
+    # len(dots)
+
 
     #テキストへの書き出し、x:横軸、y:縦軸に変換
     txt = open(txtpath,"w")

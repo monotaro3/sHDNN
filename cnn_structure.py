@@ -8,6 +8,7 @@ import chainer.links as L
 from chainer.training import extensions
 from chainer.datasets import tuple_dataset
 import time
+from datetime import datetime
 import cv2 as cv
 
 class vehicle_classify_CNN(Chain):
@@ -27,8 +28,13 @@ class vehicle_classify_CNN(Chain):
 
 
 def main():
+    logfile = open("cnn_train.log", "a")
+    date = datetime.now()
+    startdate = date.strftime('%Y/%m/%d %H:%M:%S')
+    print("execution:" + startdate, file=logfile)
     exec_time = time.time()
-    modelload = True
+
+    modelload = True      #既存のモデルを読み込んでトレーニング
 
     model = L.Classifier(vehicle_classify_CNN())
     optimizer = optimizers.SGD()
@@ -41,9 +47,9 @@ def main():
     val = np.load("val.npy")
     mean_image = np.load("mean_image.npy")
 
-    windows = np.load("windows.npy")
-    windows = windows[0:100]
-    windows -=mean_image
+    # windows = np.load("windows.npy")
+    # windows = windows[0:100]
+    # windows -=mean_image
 
     data -= mean_image
 
@@ -62,7 +68,7 @@ def main():
     # data, testdata = np.split(data,[N_])
     # val, testval = np.split(val,[N_])
 
-    N = 18000
+    N = 100000 #100000
     data_train ,data_test = np.split(data,[N])
     val_train , val_test = np.split(val,[N])
 
@@ -73,7 +79,7 @@ def main():
     test_iter = iterators.SerialIterator(test,batch_size=50,repeat=False,shuffle=False)
 
     updater = training.StandardUpdater(train_iter,optimizer,device=0)
-    trainer = training.Trainer(updater,(2000,"epoch"),out = "result")
+    trainer = training.Trainer(updater,(100,"epoch"),out = "result")
 
     trainer.extend(extensions.Evaluator(test_iter,model,device=0))
     trainer.extend(extensions.LogReport())
@@ -82,18 +88,22 @@ def main():
 
     trainer.run()
 
-    print("predict:",model.predictor(cuda.to_gpu(windows)).data)
-    print("probability:",F.softmax(model.predictor(cuda.to_gpu(windows)).data).data)
-    print("label:",F.softmax(model.predictor(cuda.to_gpu(windows)).data).data.argmax(axis=1))
-    print(type(F.softmax(model.predictor(cuda.to_gpu(windows)).data).data.argmax(axis=1)))
-    #print("valid:",testval)
+    # print("predict:",model.predictor(cuda.to_gpu(windows)).data)
+    # print("probability:",F.softmax(model.predictor(cuda.to_gpu(windows)).data).data)
+    # print("label:",F.softmax(model.predictor(cuda.to_gpu(windows)).data).data.argmax(axis=1))
+    # print(type(F.softmax(model.predictor(cuda.to_gpu(windows)).data).data.argmax(axis=1)))
+
 
     model.to_cpu()
     serializers.save_npz("gradient_cnn.npz", model)
     serializers.save_npz("gradient_optimizer.npz", optimizer)
 
     exec_time = time.time() - exec_time
-    print("exex time:%f"% exec_time)
+    print("exex time:%f sec"% exec_time)
+    print("exex time:%f" % exec_time,file=logfile)
+
+    logfile.close()
+
 
 if __name__ == "__main__":
     main()
