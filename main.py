@@ -225,8 +225,6 @@ def predictor(data,batch,gpu = 0):
         model.to_gpu()
     r = list(range(0, len(data), batch))
     r.pop()
-    # results = np.empty((0,1),int)
-    # result = None
     for i in r:
         if gpu == 1:x = cuda.to_gpu(data[i:i+batch])
         else:x = data[i:i+batch]
