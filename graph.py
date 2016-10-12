@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 f = open("C:/work/PycharmProjects/gradient_slide_cnn/model/2016100717_35t_1000/log","r")
 
 #f2 = open("C:/work/PycharmProjects/gradient_slide_cnn/model/2016090901_1000/log","r")
-#test2_2
 
 f.readline()
 i = 0

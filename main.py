@@ -247,7 +247,6 @@ def predictor(data,batch,gpu = 0):
     return results
 
 def main():
-    ##test2_1
     logfile = open("gradient_cnn.log","a")
     date = datetime.now()
     startdate = date.strftime('%Y/%m/%d %H:%M:%S')
