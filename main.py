@@ -339,8 +339,10 @@ def main():
     start = time.time()
     for i in range(len(vehicle_list)):
         for j in range(len(slidewindows)):
-            if slidewindows[j].result == 1 and slidewindows[j].cover(vehicle_list[i]):
-                vehicle_detected[i] = True
+            if slidewindows[j].cover(vehicle_list[i]):
+                if slidewindows[j].result == 1:
+                    vehicle_detected[i] = True
+
     end = time.time()
     time_analysis = end - start
     print('finished.(%.3f seconds)' % time_analysis)
