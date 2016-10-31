@@ -147,6 +147,9 @@ def getslidewindows(img,windowsize,slide=0.5,mindistance = 0.15,thre1 = 60,thre2
     img_org = calcgrad(img)
     img_thre1 = calcgrad(img_thre1)
     img_thre2 = calcgrad(img_thre2)
+    # cv.imwrite("grad_orijinal.jpg",img_org)
+    # cv.imwrite("grad_thre1.jpg", img_thre1)
+    # cv.imwrite("grad_thre2.jpg", img_thre2)
     # print("making sliding windows for each gradient image...")
     # start = time.time()
     values = [img_org,img_thre1,img_thre2]
