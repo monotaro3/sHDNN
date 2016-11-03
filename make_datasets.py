@@ -8,7 +8,7 @@ from numpy.random import *
 def make_bboximg(region,img):
     ymin,xmin,ymax,xmax = region #opecvの座標系に変換
     bboximg = img[xmin:xmax+1,ymin:ymax+1,:]
-    bboximg = (cv.resize(bboximg,(48,48))).transpose(2, 0, 1)
+    bboximg = (cv.resize(bboximg,(48,48))).transpose(2, 0, 1)  #無理やりリサイズ
     return bboximg
 
 def make_bboxeslist(gt_file):
