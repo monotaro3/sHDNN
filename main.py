@@ -19,7 +19,7 @@ from cnn_structure import vehicle_classify_CNN
 
 class slidingwindow():
     def __init__(self,img,x,y,windowsize,slidestep = 0.5,efactor = 1.414,locatedistance=0.45):
-        self.x = x #x:horizontal,y:vertical
+        self.x = x #x:horizontal,y:vertical upper left corner
         self.y = y
         self.windowsize = windowsize
         self.slidestep = int(self.windowsize * slidestep)
@@ -141,7 +141,7 @@ def makeslidingwindows(img,windowsize,slide=0.5): #input image:grayscale
             slidewindows.append(slidingwindow(img,j*step,i*step,windowsize))
     return slidewindows
 
-def getslidewindows(img,windowsize,slide=0.5,mindistance = 0.15,thre1 = 60,thre2 = 100,searchrange = 5):
+def getslidewindows(img,windowsize,meshsize, slide=0.5,mindistance = 0.15,thre1 = 60,thre2 = 100,searchrange = 5):
     img_thre1 = img_thresholding(img,thre1,0)
     img_thre2 = img_thresholding(img,thre2,1)
     img_org = calcgrad(img)
@@ -156,17 +156,20 @@ def getslidewindows(img,windowsize,slide=0.5,mindistance = 0.15,thre1 = 60,thre2
     windows1 = None
     windows2 = None
     windows3 = None
-    with futures.ProcessPoolExecutor() as executor:
-        mappings = {executor.submit(makeslidingwindows,n,windowsize): n for n in values}
-        for future in futures.as_completed(mappings):
-            target = mappings[future]
-            if (target == img_org).all() :windows1 = future.result()
-            if (target == img_thre1).all():windows2 = future.result()
-            if (target == img_thre2).all():windows3 = future.result()
 
-    # windows1 = makeslidingwindows(img_org,windowsize)
-    # windows2 = makeslidingwindows(img_thre1,windowsize)
-    # windows3 = makeslidingwindows(img_thre2,windowsize)
+    multiprocess = 1 #マルチプロセス 1:実行　ただしデバッグ使用不可
+    if multiprocess == 1:
+        with futures.ProcessPoolExecutor() as executor:     #マルチプロセス処理
+            mappings = {executor.submit(makeslidingwindows,n,windowsize): n for n in values}
+            for future in futures.as_completed(mappings):
+                target = mappings[future]
+                if (target == img_org).all() :windows1 = future.result()
+                if (target == img_thre1).all():windows2 = future.result()
+                if (target == img_thre2).all():windows3 = future.result()
+    else:
+        windows1 = makeslidingwindows(img_org,windowsize)   #シングルプロセス処理
+        windows2 = makeslidingwindows(img_thre1,windowsize)
+        windows3 = makeslidingwindows(img_thre2,windowsize)
     # end = time.time()
     # time_makingslides = end - start
     print("number of all sliding windows:" + str(len(windows1)+len(windows2)+len(windows3)))
@@ -215,7 +218,24 @@ def getslidewindows(img,windowsize,slide=0.5,mindistance = 0.15,thre1 = 60,thre2
         if i.repeat == False:slidewindows.append(i)
     for i in windows3:
         if i.repeat == False:slidewindows.append(i)
-    return slidewindows
+
+    mesh_width = math.ceil(img_width/meshsize)
+    mesh_height = math.ceil(img_height/meshsize)
+    slidewindows_mesh = []
+    meshlen = int(mesh_width * mesh_height)
+    for i in range(meshlen):
+        slidewindows_mesh.append([])
+    for i in slidewindows:
+        center_x = i.x - 1 + int(math.floor(i.windowsize/2))
+        center_y = i.y - 1 + int(math.floor(i.windowsize/2))
+        if center_x <= 0 : center_x = 1
+        if center_y <= 0 : center_y = 1
+        if center_x > img_width: center_x = img_width
+        if center_y > img_height: center_y = img_height
+        idx_x = int(math.ceil(center_x/meshsize))
+        idx_y = int(math.ceil(center_y/meshsize))
+        slidewindows_mesh[mesh_width * (idx_y - 1) + idx_x - 1].append(i)
+    return slidewindows, slidewindows_mesh
 
 def predictor(data,batch,gpu = 0):
     model = L.Classifier(vehicle_classify_CNN())
@@ -250,7 +270,6 @@ def predictor(data,batch,gpu = 0):
     return results
 
 def main():
-    #use github
     logfile = open("gradient_cnn.log","a")
     date = datetime.now()
     startdate = date.strftime('%Y/%m/%d %H:%M:%S')
@@ -259,7 +278,9 @@ def main():
     print("execution:" + startdate,file=logfile)
     exec_time = time.time()
 
-    imgpath = "C:/work/vehicle_detection/images/test/ny_mall2.tif"
+    meshsize = 50
+
+    imgpath = "C:/work/vehicle_detection/images/test/mikawaharbor2.tif"
 
     print("image:"+imgpath)
     print("image:" + imgpath,file=logfile)
@@ -271,7 +292,7 @@ def main():
     print("making sliding windows for each gradient image...")
     print("making sliding windows for each gradient image...",file=logfile)
     start = time.time()
-    slidewindows = getslidewindows(img,35)  #18,35
+    slidewindows, slidewindows_mesh = getslidewindows(img,18,meshsize=meshsize)  #18,35
     end = time.time()
     time_makingslides = end - start
     print("finished.(%.3f seconds)" % time_makingslides)
@@ -324,7 +345,10 @@ def main():
     vehicle_detected = [False]*len(vehicle_list)
 
     y, x, channel = img.shape
-    for i in vehicle_list:
+    mesh_width = int(math.ceil(x / meshsize))
+    mesh_height = int(math.ceil(y / meshsize))
+
+    for i in vehicle_list:   #groundtruthの矩形を正方形に拡張
         if (i[2]-i[0]) < v_windowsize:
             if i[0] == 0:i[0] = i[2] - v_windowsize
             else:i[2] = i[0] + v_windowsize
@@ -340,11 +364,22 @@ def main():
     print("analyzing results...")
     print("analyzing results...",file=logfile)
     start = time.time()
+
     for i in range(len(vehicle_list)):
-        for j in range(len(slidewindows)):
-            if slidewindows[j].cover(vehicle_list[i]):
-                if slidewindows[j].result == 1:
-                    vehicle_detected[i] = True
+        gt_x = int(math.floor(vehicle_list[i][0] - 1 + (vehicle_list[i][2] - vehicle_list[i][0] + 1)/2))
+        gt_y = int(math.floor(vehicle_list[i][1] - 1 + (vehicle_list[i][3] - vehicle_list[i][1] + 1)/2))
+        idx_width = [int(math.ceil(gt_x / meshsize))]
+        idx_height = [int(math.ceil(gt_y / meshsize))]
+        if idx_width[0] != 1:idx_width.append(idx_width[0]-1)
+        if idx_width[0] != mesh_width:idx_width.append(idx_width[0]+1)
+        if idx_height[0] != 1:idx_height.append(idx_height[0]-1)
+        if idx_height[0] != mesh_height:idx_height.append(idx_height[0]+1)
+        for k in idx_width:
+            for l in idx_height:
+                for j in slidewindows_mesh[(l-1) * mesh_width + k - 1]:
+                    if j.cover(vehicle_list[i]):
+                        if j.result == 1:
+                            vehicle_detected[i] = True
 
     end = time.time()
     time_analysis = end - start
