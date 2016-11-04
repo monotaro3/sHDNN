@@ -32,7 +32,7 @@ class slidingwindow():
         self.movetocentroid(img)
         self.x -= int((self.windowsize * efactor - self.windowsize)/2)
         self.y -= int((self.windowsize * efactor - self.windowsize)/2)
-        self.windowsize = int(self.windowsize * efactor)
+        self.windowsize = int(round(self.windowsize * efactor))
         self.movetocentroid(img)
 
     def movetocentroid(self,img):
@@ -131,17 +131,17 @@ def img_thresholding(img,threshold,direction=0):
         img = cv.merge((img_b, img_g, img_r))
     return img
 
-def makeslidingwindows(img,windowsize,slide=0.5): #input image:grayscale
+def makeslidingwindows(img,windowsize,efactor,slide=0.5): #input image:grayscale
     img_height,img_width = img.shape
     slidewindows = []
     x, y = 0,0
     step = int(windowsize * slide)
     for i in range(math.ceil(img_height/step)):
         for j in range(math.ceil(img_width/step)):
-            slidewindows.append(slidingwindow(img,j*step,i*step,windowsize))
+            slidewindows.append(slidingwindow(img,j*step,i*step,windowsize,efactor=efactor))
     return slidewindows
 
-def getslidewindows(img,windowsize,meshsize, slide=0.5,mindistance = 0.15,thre1 = 60,thre2 = 100,searchrange = 5):
+def getslidewindows(img,windowsize,meshsize, efactor, slide=0.5,mindistance = 0.15,thre1 = 60,thre2 = 100,searchrange = 5):
     img_thre1 = img_thresholding(img,thre1,0)
     img_thre2 = img_thresholding(img,thre2,1)
     img_org = calcgrad(img)
@@ -157,19 +157,19 @@ def getslidewindows(img,windowsize,meshsize, slide=0.5,mindistance = 0.15,thre1 
     windows2 = None
     windows3 = None
 
-    multiprocess = 1 #マルチプロセス 1:実行　ただしデバッグ使用不可
+    multiprocess = 1 #マルチプロセス 1:有効化　ただしデバッグ使用不可
     if multiprocess == 1:
         with futures.ProcessPoolExecutor() as executor:     #マルチプロセス処理
-            mappings = {executor.submit(makeslidingwindows,n,windowsize): n for n in values}
+            mappings = {executor.submit(makeslidingwindows,n,windowsize,efactor): n for n in values}
             for future in futures.as_completed(mappings):
                 target = mappings[future]
                 if (target == img_org).all() :windows1 = future.result()
                 if (target == img_thre1).all():windows2 = future.result()
                 if (target == img_thre2).all():windows3 = future.result()
     else:
-        windows1 = makeslidingwindows(img_org,windowsize)   #シングルプロセス処理
-        windows2 = makeslidingwindows(img_thre1,windowsize)
-        windows3 = makeslidingwindows(img_thre2,windowsize)
+        windows1 = makeslidingwindows(img_org,windowsize,efactor)   #シングルプロセス処理
+        windows2 = makeslidingwindows(img_thre1,windowsize,efactor)
+        windows3 = makeslidingwindows(img_thre2,windowsize,efactor)
     # end = time.time()
     # time_makingslides = end - start
     print("number of all sliding windows:" + str(len(windows1)+len(windows2)+len(windows3)))
@@ -270,165 +270,235 @@ def predictor(data,batch,gpu = 0):
     return results
 
 def main():
-    logfile = open("gradient_cnn.log","a")
+    procDIR = True #ディレクトリ内ファイル一括処理
+    showImage = True #処理後画像表示　ディレクトリ内処理の場合はオフ
+    cnn_dir = os.getcwd()
+    #cnn_dir = "C:/work/PycharmProjects/gradient_slide_cnn/model/"
+    work_dir = "C:/work/vehicle_detection/images/test/"
+    result_dir = work_dir
+    result_dir = "C:/work/vehicle_detection/images/test/"
+    meshsize = 50
+    gpuEnable = 1 #1:有効化
+    batchsize = 50
+    efactor = 1.414
+
+    #slidewindowsize = 35 #18,35
+    imgpath = "C:/work/vehicle_detection/images/test/mikawaharbor2.tif" #単一ファイル処理
+
+    img_files = []
+    img_files_ignored = []
+
     date = datetime.now()
     startdate = date.strftime('%Y/%m/%d %H:%M:%S')
     f_startdate = date.strftime('%Y%m%d_%H%M%S')
-    print("execution:" + startdate)
-    print("execution:" + startdate,file=logfile)
-    exec_time = time.time()
+    result_dir = os.path.join(result_dir,"result_sHDNN_"+f_startdate)
+    if not os.path.isdir(result_dir):
+        os.mkdir(result_dir)
 
-    meshsize = 50
+    if procDIR: #処理可の画像ファイルを確認
+        tmp = os.listdir(work_dir)
+        files = sorted([os.path.join(work_dir, x) for x in tmp if os.path.isfile(work_dir + x)])
+        for i in files:
+            root, ext = os.path.splitext(i)
+            if ext == ".tif" or ext == ".jpg" or ext == ".png":
+                cfgpath = root + ".cfg"
+                gt_file = root + ".txt"
+                if os.path.isfile(cfgpath) and os.path.isfile(gt_file):
+                    img_files.append(i)
+                else:
+                    img_files_ignored.append(i)
+        logfile = open(os.path.join(result_dir,"gradient_cnn.log"), "a")
+        print("all execution start:" + startdate)
+        print("all execution start:" + startdate,file=logfile)
+        print("%d target file(s):" % len(img_files))
+        print("%d target file(s):" % len(img_files),file=logfile)
+        for i in img_files:
+            print(" " + i)
+            print(" " + i,file=logfile)
+        print("%d ignored file(s):" % len(img_files_ignored))
+        print("%d ignored file(s):" % len(img_files_ignored),file=logfile)
+        for i in img_files_ignored:
+            print(" " + i)
+            print(" " + i,file=logfile)
+        print("")
+        print("",file=logfile)
+        logfile.close()
+        all_exec_time = time.time()
+    else:
+        img_files.append(imgpath)
 
-    imgpath = "C:/work/vehicle_detection/images/test/mikawaharbor2.tif"
+    for imgpath in img_files:
 
-    print("image:"+imgpath)
-    print("image:" + imgpath,file=logfile)
+        date = datetime.now()
+        startdate = date.strftime('%Y/%m/%d %H:%M:%S')
+        f_startdate = date.strftime('%Y%m%d_%H%M%S')
 
-    img = cv.imread(imgpath)
-    print("img shape:"+str(img.shape))
-    print("img shape:" + str(img.shape),file=logfile)
+        logfile = open(os.path.join(result_dir,"gradient_cnn.log"), "a")
+        print("execution:" + startdate)
+        print("execution:" + startdate,file=logfile)
+        exec_time = time.time()
 
-    print("making sliding windows for each gradient image...")
-    print("making sliding windows for each gradient image...",file=logfile)
-    start = time.time()
-    slidewindows, slidewindows_mesh = getslidewindows(img,18,meshsize=meshsize)  #18,35
-    end = time.time()
-    time_makingslides = end - start
-    print("finished.(%.3f seconds)" % time_makingslides)
-    print("finished.(%.3f seconds)" % time_makingslides,file=logfile)
+        print("image:"+imgpath)
+        print("image:" + imgpath,file=logfile)
 
-    # img_ = np.array(img)
-    # for i in slidewindows:
-    #     i.draw_(img_)
-    # cv.imwrite("gradient_slidingwindows.jpg",img_)
-    # w = 0.6
-    # x,y,c = img_.shape
-    # x = int(x*w)
-    # y = int(y*w)
-    # img_ = cv.resize(img_,(y,x))
-    # cv.imshow("test",img_)
-    # cv.waitKey(0)
-    # cv.destroyAllWindows()
+        img = cv.imread(imgpath)
+        print("img shape:"+str(img.shape))
+        print("img shape:" + str(img.shape),file=logfile)
 
-    windowimgs = []
-    for i in slidewindows:
-        windowimgs.append(i.windowimg(img))
-
-    npwindows = np.array(windowimgs,np.float32)
-    np.save("windows.npy",npwindows)
+        root,ext = os.path.splitext(imgpath)
+        gt_file = root + ".txt"
+        cfgpath = root+".cfg"
+        cfg = open(cfgpath,"r")
+        gtwindowsize = int(cfg.readline())
+        v_windowsize = gtwindowsize - 1
 
 
+        init_slidewindowsize = int(round(gtwindowsize / efactor))
+        slidewindowsize = int(round(init_slidewindowsize * efactor))
 
-    print("number of windows:"+str(len(slidewindows)))
-    print("number of windows:" + str(len(slidewindows)),file=logfile)
+        print("making sliding windows for each gradient image...")
+        print("making sliding windows for each gradient image...",file=logfile)
+        start = time.time()
+        slidewindows, slidewindows_mesh = getslidewindows(img,init_slidewindowsize,meshsize,efactor)
+        end = time.time()
+        time_makingslides = end - start
+        print("finished.(%.3f seconds)" % time_makingslides)
+        print("finished.(%.3f seconds)" % time_makingslides,file=logfile)
 
-    mean_image = np.load("mean_image.npy")
-    npwindows -= mean_image
+        # img_ = np.array(img) #処理途中のスライドウィンドウ可視化
+        # for i in slidewindows:
+        #     i.draw_(img_)
+        # cv.imwrite("gradient_slidingwindows.jpg",img_)
+        # w = 0.6
+        # x,y,c = img_.shape
+        # x = int(x*w)
+        # y = int(y*w)
+        # img_ = cv.resize(img_,(y,x))
+        # cv.imshow("test",img_)
+        # cv.waitKey(0)
+        # cv.destroyAllWindows()
 
-    print("predicting windows...")
-    print("predicting windows...",file=logfile)
-    start = time.time()
-    results = predictor(npwindows,50,gpu=1)
-    end = time.time()
-    time_predicting = end - start
-    print("finished.(%.3f seconds)" % time_predicting)
-    print("finished.(%.3f seconds)" % time_predicting,file=logfile)
+        windowimgs = []
+        for i in slidewindows:
+            windowimgs.append(i.windowimg(img))
 
-    root,ext = os.path.splitext(imgpath)
-    gt_file = root + ".txt"
-    cfgpath = root+".cfg"
-    cfg = open(cfgpath,"r")
-    v_windowsize = int(cfg.readline()) - 1
+        npwindows = np.array(windowimgs,np.float32)
+        #np.save("windows.npy",npwindows)
 
-    vehicle_list = make_bboxeslist(gt_file)
-    vehicle_detected = [False]*len(vehicle_list)
+        print("number of windows:%s size:%d" %(str(len(slidewindows)),slidewindowsize))
+        print("number of windows:%s size:%d" %(str(len(slidewindows)),slidewindowsize),file=logfile)
 
-    y, x, channel = img.shape
-    mesh_width = int(math.ceil(x / meshsize))
-    mesh_height = int(math.ceil(y / meshsize))
+        mean_image = np.load(os.path.join(cnn_dir, "mean_image.npy")) #平均画像ロード
+        npwindows -= mean_image
 
-    for i in vehicle_list:   #groundtruthの矩形を正方形に拡張
-        if (i[2]-i[0]) < v_windowsize:
-            if i[0] == 0:i[0] = i[2] - v_windowsize
-            else:i[2] = i[0] + v_windowsize
-        if (i[3] - i[1]) < v_windowsize:
-            if i[1] == 0:
-                i[1] = i[3] - v_windowsize
-            else:
-                i[3] = i[1] + v_windowsize
+        print("predicting windows...")
+        print("predicting windows...",file=logfile)
+        start = time.time()
+        results = predictor(npwindows,batchsize,gpu=gpuEnable)
+        end = time.time()
+        time_predicting = end - start
+        print("finished.(%.3f seconds)" % time_predicting)
+        print("finished.(%.3f seconds)" % time_predicting,file=logfile)
 
-    for i in range(len(slidewindows)):
-        slidewindows[i].result = results[i]
+        vehicle_list = make_bboxeslist(gt_file)
+        vehicle_detected = [False]*len(vehicle_list)
 
-    print("analyzing results...")
-    print("analyzing results...",file=logfile)
-    start = time.time()
+        y, x, channel = img.shape
+        mesh_width = int(math.ceil(x / meshsize))
+        mesh_height = int(math.ceil(y / meshsize))
 
-    for i in range(len(vehicle_list)):
-        gt_x = int(math.floor(vehicle_list[i][0] - 1 + (vehicle_list[i][2] - vehicle_list[i][0] + 1)/2))
-        gt_y = int(math.floor(vehicle_list[i][1] - 1 + (vehicle_list[i][3] - vehicle_list[i][1] + 1)/2))
-        idx_width = [int(math.ceil(gt_x / meshsize))]
-        idx_height = [int(math.ceil(gt_y / meshsize))]
-        if idx_width[0] != 1:idx_width.append(idx_width[0]-1)
-        if idx_width[0] != mesh_width:idx_width.append(idx_width[0]+1)
-        if idx_height[0] != 1:idx_height.append(idx_height[0]-1)
-        if idx_height[0] != mesh_height:idx_height.append(idx_height[0]+1)
-        for k in idx_width:
-            for l in idx_height:
-                for j in slidewindows_mesh[(l-1) * mesh_width + k - 1]:
-                    if j.cover(vehicle_list[i]):
-                        if j.result == 1:
-                            vehicle_detected[i] = True
+        for i in vehicle_list:   #groundtruthの矩形を正方形に拡張
+            if (i[2]-i[0]) < v_windowsize:
+                if i[0] == 0:i[0] = i[2] - v_windowsize
+                else:i[2] = i[0] + v_windowsize
+            if (i[3] - i[1]) < v_windowsize:
+                if i[1] == 0:
+                    i[1] = i[3] - v_windowsize
+                else:
+                    i[3] = i[1] + v_windowsize
 
-    end = time.time()
-    time_analysis = end - start
-    print('finished.(%.3f seconds)' % time_analysis)
-    print('finished.(%.3f seconds)' % time_analysis,file=logfile)
+        for i in range(len(slidewindows)):
+            slidewindows[i].result = results[i]
 
-    TP,TN,FP,FN = 0,0,0,0
-    detectobjects = 0
+        print("analyzing results...")
+        print("analyzing results...",file=logfile)
+        start = time.time()
 
-    for i in slidewindows:
-        if i.result == 1 and i.vehiclecover == True:TP += 1
-        elif i.result == 0 and i.vehiclecover == False:TN += 1
-        elif i.result == 1 and i.vehiclecover == False:FP += 1
-        else:FN += 1
-        if i.result == 1:detectobjects += 1
-        i.draw(img)
+        for i in range(len(vehicle_list)):
+            gt_x = int(math.floor(vehicle_list[i][0] - 1 + (vehicle_list[i][2] - vehicle_list[i][0] + 1)/2))
+            gt_y = int(math.floor(vehicle_list[i][1] - 1 + (vehicle_list[i][3] - vehicle_list[i][1] + 1)/2))
+            idx_width = [int(math.ceil(gt_x / meshsize))]
+            idx_height = [int(math.ceil(gt_y / meshsize))]
+            if idx_width[0] != 1:idx_width.append(idx_width[0]-1)
+            if idx_width[0] != mesh_width:idx_width.append(idx_width[0]+1)
+            if idx_height[0] != 1:idx_height.append(idx_height[0]-1)
+            if idx_height[0] != mesh_height:idx_height.append(idx_height[0]+1)
+            for k in idx_width:
+                for l in idx_height:
+                    for j in slidewindows_mesh[(l-1) * mesh_width + k - 1]:
+                        if j.cover(vehicle_list[i]):
+                            if j.result == 1:
+                                vehicle_detected[i] = True
 
-    exec_time = time.time() - exec_time
+        end = time.time()
+        time_analysis = end - start
+        print('finished.(%.3f seconds)' % time_analysis)
+        print('finished.(%.3f seconds)' % time_analysis,file=logfile)
 
-    print("---------result--------")
-    print("Overall Execution time  :%.3f seconds" % exec_time)
-    print("GroundTruth vehicles    :%d" % len(vehicle_detected))
-    print("detected objects        :%d" % detectobjects)
-    print("PR(d vehicles/d objects):%d/%d %f" %(vehicle_detected.count(True),detectobjects,vehicle_detected.count(True)/detectobjects))
-    print("RR(detected vehicles)   :%d/%d %f" % (vehicle_detected.count(True),len(vehicle_detected),vehicle_detected.count(True)/len(vehicle_detected)))
-    print("TP,TN,FP,FN             :%d,%d,%d,%d" % (TP, TN, FP, FN))
+        TP,TN,FP,FN = 0,0,0,0
+        detectobjects = 0
 
-    print("---------result--------",file=logfile)  #to logfile
-    print("Overall Execution time  :%.3f seconds" % exec_time,file=logfile)
-    print("GroundTruth vehicles    :%d" % len(vehicle_detected),file=logfile)
-    print("detected objects        :%d" % detectobjects,file=logfile)
-    print("PR(d vehicles/d objects):%d/%d %f" %(vehicle_detected.count(True),detectobjects,vehicle_detected.count(True)/detectobjects),file=logfile)
-    print("RR(detected vehicles)   :%d/%d %f" % (vehicle_detected.count(True),len(vehicle_detected),vehicle_detected.count(True)/len(vehicle_detected)),file=logfile)
-    print("TP,TN,FP,FN             :%d,%d,%d,%d" % (TP, TN, FP, FN),file=logfile)
-    print("",file=logfile)
+        for i in slidewindows:
+            if i.result == 1 and i.vehiclecover == True:TP += 1
+            elif i.result == 0 and i.vehiclecover == False:TN += 1
+            elif i.result == 1 and i.vehiclecover == False:FP += 1
+            else:FN += 1
+            if i.result == 1:detectobjects += 1
+            i.draw(img)
 
-    logfile.close()
-    result_img = root + "_result" + f_startdate + ".jpg"
-    cv.imwrite(result_img,img)
+        exec_time = time.time() - exec_time
 
-    w = 0.6
-    x,y,c = img.shape
-    x = int(x*w)
-    y = int(y*w)
-    img = cv.resize(img,(y,x))
-    cv.imshow("test",img)
-    cv.waitKey(0)
-    cv.destroyAllWindows()
+        print("---------result--------")
+        print("Overall Execution time  :%.3f seconds" % exec_time)
+        print("GroundTruth vehicles    :%d" % len(vehicle_detected))
+        print("detected objects        :%d" % detectobjects)
+        print("PR(d vehicles/d objects):%d/%d %f" %(vehicle_detected.count(True),detectobjects,vehicle_detected.count(True)/detectobjects))
+        print("RR(detected vehicles)   :%d/%d %f" % (vehicle_detected.count(True),len(vehicle_detected),vehicle_detected.count(True)/len(vehicle_detected)))
+        print("TP,TN,FP,FN             :%d,%d,%d,%d" % (TP, TN, FP, FN))
+        print("")
 
+        print("---------result--------",file=logfile)  #to logfile
+        print("Overall Execution time  :%.3f seconds" % exec_time,file=logfile)
+        print("GroundTruth vehicles    :%d" % len(vehicle_detected),file=logfile)
+        print("detected objects        :%d" % detectobjects,file=logfile)
+        print("PR(d vehicles/d objects):%d/%d %f" %(vehicle_detected.count(True),detectobjects,vehicle_detected.count(True)/detectobjects),file=logfile)
+        print("RR(detected vehicles)   :%d/%d %f" % (vehicle_detected.count(True),len(vehicle_detected),vehicle_detected.count(True)/len(vehicle_detected)),file=logfile)
+        print("TP,TN,FP,FN             :%d,%d,%d,%d" % (TP, TN, FP, FN),file=logfile)
+        print("",file=logfile)
+
+        logfile.close()
+
+        img_bsname = os.path.basename(imgpath) #結果画像出力
+        root,exe = os.path.splitext(img_bsname)
+        result_img = os.path.join(result_dir, root + "_sHDNN_" + f_startdate + ".jpg")
+        cv.imwrite(result_img,img)
+
+        if not(procDIR) and showImage: #結果画像表示
+            w = 0.6
+            x,y,c = img.shape
+            x = int(x*w)
+            y = int(y*w)
+            img = cv.resize(img,(y,x))
+            cv.imshow("test",img)
+            cv.waitKey(0)
+            cv.destroyAllWindows()
+
+    if procDIR:
+        logfile = open(os.path.join(result_dir, "gradient_cnn.log"), "a")
+        all_exec_time = time.time() - all_exec_time
+        print("\nall exec time:%.3f seconds" % all_exec_time)
+        print("\nall exec time:%.3f seconds" % all_exec_time, file=logfile)
+        logfile.close()
 
 if __name__ == "__main__":
     main()
