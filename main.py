@@ -284,6 +284,7 @@ def main():
     batchsize = 50
     mean_image_dir = ""
     mean_image_file = "mean_image.npy"
+    logfile_name = "gradient_cnn.log"
 
     meshsize = 50
 
@@ -294,7 +295,7 @@ def main():
         if procDIR: result_dir = test_dir
         else: result_dir = os.path.dirname(imgpath)
     if mean_image_dir == "": mean_image_dir = cnn_dir
-    mean_image_file = os.path.join(mean_image_dir,mean_image_file)
+    mean_image_path = os.path.join(mean_image_dir,mean_image_file)
     cnn_path = [cnn_dir, cnn_classifier, cnn_optimizer]
     slide_param ={"efactor":efactor, "locatedistance":locatedistance}
 
@@ -309,6 +310,7 @@ def main():
     startdate = date.strftime('%Y/%m/%d %H:%M:%S')
     f_startdate = date.strftime('%Y%m%d_%H%M%S')
     result_dir = os.path.join(result_dir,"result_sHDNN_"+f_startdate)
+    logfile_path = os.path.join(result_dir, logfile_name)
     if not os.path.isdir(result_dir):
         os.mkdir(result_dir)
 
@@ -324,7 +326,7 @@ def main():
                     img_files.append(i)
                 else:
                     img_files_ignored.append(i)
-        logfile = open(os.path.join(result_dir,"gradient_cnn.log"), "a")
+        logfile = open(logfile_path, "a")
         print("all execution start:" + startdate)
         print("all execution start:" + startdate,file=logfile)
         print("%d target file(s):" % len(img_files))
@@ -350,7 +352,7 @@ def main():
         startdate = date.strftime('%Y/%m/%d %H:%M:%S')
         f_startdate = date.strftime('%Y%m%d_%H%M%S')
 
-        logfile = open(os.path.join(result_dir,"gradient_cnn.log"), "a")
+        logfile = open(logfile_path, "a")
         print("execution:" + startdate)
         print("execution:" + startdate,file=logfile)
         exec_time = time.time()
@@ -368,7 +370,6 @@ def main():
         cfg = open(cfgpath,"r")
         gtwindowsize = int(cfg.readline())
         v_windowsize = gtwindowsize - 1
-
 
         init_slidewindowsize = int(round(gtwindowsize / efactor))
         slidewindowsize = int(round(init_slidewindowsize * efactor))
@@ -405,7 +406,7 @@ def main():
         print("number of windows:%s size:%d" %(str(len(slidewindows)),slidewindowsize))
         print("number of windows:%s size:%d" %(str(len(slidewindows)),slidewindowsize),file=logfile)
 
-        mean_image = np.load(os.path.join(cnn_dir, mean_image_file)) #平均画像ロード
+        mean_image = np.load(mean_image_path) #平均画像ロード
         npwindows -= mean_image
 
         print("predicting windows...")
@@ -511,10 +512,10 @@ def main():
             cv.destroyAllWindows()
 
     if procDIR:
-        logfile = open(os.path.join(result_dir, "gradient_cnn.log"), "a")
+        logfile = open(logfile_path, "a")
         all_exec_time = time.time() - all_exec_time
-        print("\nall exec time:%.3f seconds" % all_exec_time)
-        print("\nall exec time:%.3f seconds" % all_exec_time, file=logfile)
+        print("all exec time:%.3f seconds" % all_exec_time)
+        print("all exec time:%.3f seconds" % all_exec_time, file=logfile)
         logfile.close()
 
 if __name__ == "__main__":
