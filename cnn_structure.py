@@ -10,6 +10,7 @@ from chainer.datasets import tuple_dataset
 import time
 from datetime import datetime
 import cv2 as cv
+import os
 
 class vehicle_classify_CNN(Chain):
     def __init__(self):
@@ -26,77 +27,105 @@ class vehicle_classify_CNN(Chain):
         y = self.fc(h3)
         return y
 
+def cnn_train():
+    modelload = True  # 既存のモデルを読み込んでトレーニング
 
-def main():
-    logfile = open("cnn_train.log", "a")
+    model_dir = "model"
+    model_name = "gradient_cnn.npz"
+    optimizer_name = "gradient_optimizer.npz"
+    logfile_name = "cnn_train.log"
+
+    trainlog_dir = "trainlog"
+
+    data_dir = "data"
+    data_name = "data.npy"
+    val_name = "val.npy"
+    meanimg_name = "mean_image.npy"
+
+    batchsize = 100
+    epoch = 3
+    N = 100000 #split data into training and validation
+
+    model_path = os.path.join(model_dir, model_name)
+    optimizer_path = os.path.join(model_dir, optimizer_name)
+    logfile_path = os.path.join(model_dir, logfile_name)
+    data_path = os.path.join(data_dir, data_name)
+    val_path = os.path.join(data_dir, val_name)
+    meanimg_loadpath = os.path.join(data_dir, meanimg_name)
+    trainlog_path = os.path.join(model_dir, trainlog_dir)
+
+    if (not modelload) and os.path.isfile(model_path):
+        print("New model training is chosen but a model already exists at the specified location.")
+        print("Process aborted.")
+        return
+
+    if not os.path.isdir(trainlog_path): os.mkdir(trainlog_path)
+
+    logfile = open(logfile_path, "a")
     date = datetime.now()
     startdate = date.strftime('%Y/%m/%d %H:%M:%S')
-    print("execution:" + startdate, file=logfile)
+    f_startdate = date.strftime('%Y%m%d_%H%M%S')
     exec_time = time.time()
-
-    modelload = True      #既存のモデルを読み込んでトレーニング
 
     model = L.Classifier(vehicle_classify_CNN())
     optimizer = optimizers.SGD()
-    if modelload:serializers.load_npz("gradient_cnn.npz", model)
+    if modelload:serializers.load_npz(model_path, model)
     optimizer.setup(model)
-    if modelload:serializers.load_npz("gradient_optimizer.npz", optimizer)
+    if modelload:serializers.load_npz(optimizer_path, optimizer)
     model.to_gpu()
 
-    data = np.load("data.npy")
-    val = np.load("val.npy")
-    mean_image = np.load("mean_image.npy")
-
-    # windows = np.load("windows.npy")
-    # windows = windows[0:100]
-    # windows -=mean_image
+    data = np.load(data_path)
+    val = np.load(val_path)
+    mean_image = np.load(meanimg_loadpath)
 
     data -= mean_image
 
-    # for i in range(20):
-    #     print(data[i])
-    #     print(data[i].shape)
-    #     print(val[i])
-    #     cv.imshow("test",data[i].transpose(1,2,0))
-    #     cv.waitKey(0)
-    #     cv.destroyAllWindows()
+    datasize = int(data.size/48/48/3)
 
-    print(data.size/48/48/3)
-    print(val.size)
+    print("execution:" + startdate)
+    print("training data dir:%s" % data_dir)
+    print("cnn model dir:%s" % model_dir)
+    print("batchsize:%d" % batchsize)
+    print("epoch:%d" % epoch)
+    print("loaded data size(number of images):%d" %datasize)
+    print("N(split number):%d" % N)
 
-    # N_ = 9500
-    # data, testdata = np.split(data,[N_])
-    # val, testval = np.split(val,[N_])
+    print("execution:" + startdate, file=logfile)
+    print("training data dir:%s" % data_dir, file=logfile)
+    print("cnn model dir:%s" % model_dir, file=logfile)
+    print("batchsize:%d" % batchsize, file=logfile)
+    print("epoch:%d" % epoch, file=logfile)
+    print("loaded data size(number of images):%d" %datasize, file=logfile)
+    print("N(split number):%d" % N, file=logfile)
 
-    N = 100000 #100000
     data_train ,data_test = np.split(data,[N])
     val_train , val_test = np.split(val,[N])
 
     train = tuple_dataset.TupleDataset(data_train,val_train)
     test = tuple_dataset.TupleDataset(data_test,val_test)
 
-    train_iter = iterators.SerialIterator(train,batch_size=100)
-    test_iter = iterators.SerialIterator(test,batch_size=50,repeat=False,shuffle=False)
+    train_iter = iterators.SerialIterator(train,batch_size=batchsize)
+    test_iter = iterators.SerialIterator(test,batch_size=batchsize,repeat=False,shuffle=False)
 
     updater = training.StandardUpdater(train_iter,optimizer,device=0)
-    trainer = training.Trainer(updater,(100,"epoch"),out = "result")
+    trainer = training.Trainer(updater,(epoch,"epoch"),out = trainlog_path)
 
     trainer.extend(extensions.Evaluator(test_iter,model,device=0))
-    trainer.extend(extensions.LogReport())
+    trainer.extend(extensions.LogReport(log_name="trainlog" + f_startdate))
     trainer.extend(extensions.PrintReport(["epoch","main/accuracy","validation/main/accuracy"]))
     trainer.extend(extensions.ProgressBar())
 
     trainer.run()
 
-    # print("predict:",model.predictor(cuda.to_gpu(windows)).data)
-    # print("probability:",F.softmax(model.predictor(cuda.to_gpu(windows)).data).data)
-    # print("label:",F.softmax(model.predictor(cuda.to_gpu(windows)).data).data.argmax(axis=1))
-    # print(type(F.softmax(model.predictor(cuda.to_gpu(windows)).data).data.argmax(axis=1)))
-
-
     model.to_cpu()
-    serializers.save_npz("gradient_cnn.npz", model)
-    serializers.save_npz("gradient_optimizer.npz", optimizer)
+    serializers.save_npz(model_path, model)
+    serializers.save_npz(optimizer_path, optimizer)
+
+    np.save(os.path.join(model_dir, meanimg_name), mean_image) #平均画像の保存
+    root, ext = os.path.splitext(meanimg_name)
+    meanimg_savepath = root + f_startdate + "." + ext
+    meanimg_savepath = os.path.join(model_dir, meanimg_savepath)
+    np.save(meanimg_savepath, mean_image)
 
     exec_time = time.time() - exec_time
     print("exex time:%f sec"% exec_time)
@@ -104,6 +133,5 @@ def main():
 
     logfile.close()
 
-
 if __name__ == "__main__":
-    main()
+    cnn_train()

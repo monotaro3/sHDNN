@@ -106,8 +106,19 @@ def make_datasets(img_dir,bg_ratio): #フォルダからgroundtruthとbackground
 
 def main():
     img_dir = "C:/work/vehicle_detection/images/train/"
+    bg_bias = 35
+    data_dir = "data"
+    data_name = "data.npy"
+    val_name = "val.npy"
+    meanimg_name = "mean_image.npy"
+    logfile_name = "traindata.log"
+
+    data_path = os.path.join(data_dir, data_name)
+    val_path = os.path.join(data_dir,val_name)
+    meanimg_path = os.path.join(data_dir, meanimg_name)
+
     print("making data...")
-    vehicle_images,bg_images = make_datasets(img_dir,35)
+    vehicle_images,bg_images = make_datasets(img_dir,bg_bias)
     print("finished.")
 
     vehicle_class = [1]*len(vehicle_images) #車は1
@@ -123,13 +134,19 @@ def main():
     npdata = np.array(data, np.float32) /255.
     npval = np.array(val, np.int32)
 
+    print("img dir:%s" %img_dir)
     print("vehicle data   :"+str(len(vehicle_images)))
     print("background data:"+str(len(bg_images)))
     print("all data       :"+str(len(data)))
-    np.save("data.npy",npdata)
-    np.save("val.npy",npval)
+    np.save(data_path, npdata)
+    np.save(val_path, npval)
     print("data.npy and val.npy saved.")
 
+    logfile = open(os.path.join(data_dir, logfile_name), "a")
+    print("img dir:%s" %img_dir, file=logfile)
+    print("vehicle data   :"+str(len(vehicle_images)), file=logfile)
+    print("background data:"+str(len(bg_images)), file=logfile)
+    print("all data       :"+str(len(data)), file=logfile)
 
     if len(data_)>0:
         mean_image = np.zeros(data_[0].shape,dtype=np.double)
@@ -138,7 +155,7 @@ def main():
         mean_image = mean_image / len(data_)
         mean_image = np.array(mean_image,dtype=np.float32)
 
-        np.save("mean_image.npy",mean_image)
+        np.save(meanimg_path, mean_image)
         print("mean_image.npy saved.")
 
         # cv.imshow("test",mean_image.transpose(1,2,0))

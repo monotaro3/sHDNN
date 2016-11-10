@@ -131,17 +131,17 @@ def img_thresholding(img,threshold,direction=0):
         img = cv.merge((img_b, img_g, img_r))
     return img
 
-def makeslidingwindows(img,windowsize,efactor,slide=0.5): #input image:grayscale
+def makeslidingwindows(img,windowsize,slide_param,slide=0.5): #input image:grayscale
     img_height,img_width = img.shape
     slidewindows = []
     x, y = 0,0
     step = int(windowsize * slide)
     for i in range(math.ceil(img_height/step)):
         for j in range(math.ceil(img_width/step)):
-            slidewindows.append(slidingwindow(img,j*step,i*step,windowsize,efactor=efactor))
+            slidewindows.append(slidingwindow(img,j*step,i*step,windowsize,efactor=slide_param["efactor"],locatedistance=slide_param["locatedistance"]))
     return slidewindows
 
-def getslidewindows(img,windowsize,meshsize, efactor, slide=0.5,mindistance = 0.15,thre1 = 60,thre2 = 100,searchrange = 5):
+def getslidewindows(img,windowsize,meshsize, slide_param, slide=0.5,mindistance = 0.15,thre1 = 60,thre2 = 100,searchrange = 5):
     img_thre1 = img_thresholding(img,thre1,0)
     img_thre2 = img_thresholding(img,thre2,1)
     img_org = calcgrad(img)
@@ -160,16 +160,16 @@ def getslidewindows(img,windowsize,meshsize, efactor, slide=0.5,mindistance = 0.
     multiprocess = 1 #マルチプロセス 1:有効化　ただしデバッグ使用不可
     if multiprocess == 1:
         with futures.ProcessPoolExecutor() as executor:     #マルチプロセス処理
-            mappings = {executor.submit(makeslidingwindows,n,windowsize,efactor): n for n in values}
+            mappings = {executor.submit(makeslidingwindows,n,windowsize,slide_param): n for n in values}
             for future in futures.as_completed(mappings):
                 target = mappings[future]
                 if (target == img_org).all() :windows1 = future.result()
                 if (target == img_thre1).all():windows2 = future.result()
                 if (target == img_thre2).all():windows3 = future.result()
     else:
-        windows1 = makeslidingwindows(img_org,windowsize,efactor)   #シングルプロセス処理
-        windows2 = makeslidingwindows(img_thre1,windowsize,efactor)
-        windows3 = makeslidingwindows(img_thre2,windowsize,efactor)
+        windows1 = makeslidingwindows(img_org,windowsize,slide_param)   #シングルプロセス処理
+        windows2 = makeslidingwindows(img_thre1,windowsize,slide_param)
+        windows3 = makeslidingwindows(img_thre2,windowsize,slide_param)
     # end = time.time()
     # time_makingslides = end - start
     print("number of all sliding windows:" + str(len(windows1)+len(windows2)+len(windows3)))
@@ -237,12 +237,14 @@ def getslidewindows(img,windowsize,meshsize, efactor, slide=0.5,mindistance = 0.
         slidewindows_mesh[mesh_width * (idx_y - 1) + idx_x - 1].append(i)
     return slidewindows, slidewindows_mesh
 
-def predictor(data,batch,gpu = 0):
+def predictor(data,cnn_path,batch,gpu = 0):
+    cnn_classifier = os.path.join(cnn_path[0], cnn_path[1])
+    cnn_optimizer = os.path.join(cnn_path[0], cnn_path[2])
     model = L.Classifier(vehicle_classify_CNN())
     optimizer = optimizers.SGD()
-    serializers.load_npz("gradient_cnn.npz", model)
+    serializers.load_npz(cnn_classifier, model)
     optimizer.setup(model)
-    serializers.load_npz("gradient_optimizer.npz", optimizer)
+    serializers.load_npz(cnn_optimizer, optimizer)
 
     if gpu == 1:
         model.to_gpu()
@@ -270,20 +272,35 @@ def predictor(data,batch,gpu = 0):
     return results
 
 def main():
-    procDIR = True #ディレクトリ内ファイル一括処理
-    showImage = True #処理後画像表示　ディレクトリ内処理の場合はオフ
-    cnn_dir = os.getcwd()
-    #cnn_dir = "C:/work/PycharmProjects/gradient_slide_cnn/model/"
-    work_dir = "C:/work/vehicle_detection/images/test/"
-    result_dir = work_dir
+    imgpath = "C:/work/vehicle_detection/images/test/mikawaharbor2.tif"  # 単一ファイル処理
+    showImage = True  # 処理後画像表示　ディレクトリ内処理の場合はオフ
+    procDIR = False  # ディレクトリ内ファイル一括処理
+    test_dir = "C:/work/vehicle_detection/images/test/"
     result_dir = "C:/work/vehicle_detection/images/test/"
-    meshsize = 50
+    cnn_dir = "model"#"C:/work/PycharmProjects/gradient_slide_cnn/model/"
+    cnn_classifier = "gradient_cnn.npz"
+    cnn_optimizer = "gradient_optimizer.npz"
     gpuEnable = 1 #1:有効化
     batchsize = 50
+    mean_image_dir = ""
+    mean_image_file = "mean_image.npy"
+
+    meshsize = 50
+
     efactor = 1.414
+    locatedistance = 0.45
+
+    if result_dir == "":
+        if procDIR: result_dir = test_dir
+        else: result_dir = os.path.dirname(imgpath)
+    if mean_image_dir == "": mean_image_dir = cnn_dir
+    mean_image_file = os.path.join(mean_image_dir,mean_image_file)
+    cnn_path = [cnn_dir, cnn_classifier, cnn_optimizer]
+    slide_param ={"efactor":efactor, "locatedistance":locatedistance}
+
 
     #slidewindowsize = 35 #18,35
-    imgpath = "C:/work/vehicle_detection/images/test/mikawaharbor2.tif" #単一ファイル処理
+
 
     img_files = []
     img_files_ignored = []
@@ -296,8 +313,8 @@ def main():
         os.mkdir(result_dir)
 
     if procDIR: #処理可の画像ファイルを確認
-        tmp = os.listdir(work_dir)
-        files = sorted([os.path.join(work_dir, x) for x in tmp if os.path.isfile(work_dir + x)])
+        tmp = os.listdir(test_dir)
+        files = sorted([os.path.join(test_dir, x) for x in tmp if os.path.isfile(test_dir + x)])
         for i in files:
             root, ext = os.path.splitext(i)
             if ext == ".tif" or ext == ".jpg" or ext == ".png":
@@ -359,7 +376,7 @@ def main():
         print("making sliding windows for each gradient image...")
         print("making sliding windows for each gradient image...",file=logfile)
         start = time.time()
-        slidewindows, slidewindows_mesh = getslidewindows(img,init_slidewindowsize,meshsize,efactor)
+        slidewindows, slidewindows_mesh = getslidewindows(img,init_slidewindowsize,meshsize,slide_param)
         end = time.time()
         time_makingslides = end - start
         print("finished.(%.3f seconds)" % time_makingslides)
@@ -388,13 +405,13 @@ def main():
         print("number of windows:%s size:%d" %(str(len(slidewindows)),slidewindowsize))
         print("number of windows:%s size:%d" %(str(len(slidewindows)),slidewindowsize),file=logfile)
 
-        mean_image = np.load(os.path.join(cnn_dir, "mean_image.npy")) #平均画像ロード
+        mean_image = np.load(os.path.join(cnn_dir, mean_image_file)) #平均画像ロード
         npwindows -= mean_image
 
         print("predicting windows...")
         print("predicting windows...",file=logfile)
         start = time.time()
-        results = predictor(npwindows,batchsize,gpu=gpuEnable)
+        results = predictor(npwindows,cnn_path,batchsize,gpu=gpuEnable)
         end = time.time()
         time_predicting = end - start
         print("finished.(%.3f seconds)" % time_predicting)
