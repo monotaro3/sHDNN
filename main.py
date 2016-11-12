@@ -272,11 +272,11 @@ def predictor(data,cnn_path,batch,gpu = 0):
     return results
 
 def main():
-    imgpath = "C:/work/vehicle_detection/images/test/mikawaharbor2.tif"  # 単一ファイル処理
+    imgpath = "../vehicle_detection/images/test/mikawaharbor2.tif"  # 単一ファイル処理
     showImage = True  # 処理後画像表示　ディレクトリ内処理の場合はオフ
     procDIR = False  # ディレクトリ内ファイル一括処理
-    test_dir = "C:/work/vehicle_detection/images/test/"
-    result_dir = "C:/work/vehicle_detection/images/test/"
+    test_dir = "../vehicle_detection/images/test/"
+    result_dir = "../vehicle_detection/images/result/"
     cnn_dir = "model"#"C:/work/PycharmProjects/gradient_slide_cnn/model/"
     cnn_classifier = "gradient_cnn.npz"
     cnn_optimizer = "gradient_optimizer.npz"
@@ -312,7 +312,7 @@ def main():
     result_dir = os.path.join(result_dir,"result_sHDNN_"+f_startdate)
     logfile_path = os.path.join(result_dir, logfile_name)
     if not os.path.isdir(result_dir):
-        os.mkdir(result_dir)
+        os.makedirs(result_dir)
 
     if procDIR: #処理可の画像ファイルを確認
         tmp = os.listdir(test_dir)
