@@ -80,7 +80,7 @@ def make_datasets(img_dir,bg_ratio): #フォルダからgroundtruthとbackground
     vehicle_images = []
     bg_images = []
     tmp = os.listdir(img_dir)
-    files = sorted([x for x in tmp if os.path.isfile(img_dir + x)])
+    files = sorted([x for x in tmp if os.path.isfile(os.path.join(img_dir, x))])
     img_files = []
     if len(files) > 0:
         root,ext =os.path.splitext(files[0])
@@ -105,9 +105,9 @@ def make_datasets(img_dir,bg_ratio): #フォルダからgroundtruthとbackground
     return vehicle_images,bg_images
 
 def main():
-    img_dir = "C:/work/vehicle_detection/images/train/"
+    img_dir = "C:/work/gspace_yangon/vehicle/train" #"C:/work/vehicle_detection/images/train/"
     bg_bias = 35
-    data_dir = "data"
+    data_dir = "data/yangon_vd_161114"
     data_name = "data.npy"
     val_name = "val.npy"
     meanimg_name = "mean_image.npy"
@@ -116,6 +116,9 @@ def main():
     data_path = os.path.join(data_dir, data_name)
     val_path = os.path.join(data_dir,val_name)
     meanimg_path = os.path.join(data_dir, meanimg_name)
+
+    if not os.path.isdir(data_dir):
+        os.makedirs(data_dir)
 
     print("making data...")
     vehicle_images,bg_images = make_datasets(img_dir,bg_bias)
@@ -134,18 +137,20 @@ def main():
     npdata = np.array(data, np.float32) /255.
     npval = np.array(val, np.int32)
 
-    print("img dir:%s" %img_dir)
+    print("training img dir:%s" %img_dir)
     print("vehicle data   :"+str(len(vehicle_images)))
     print("background data:"+str(len(bg_images)))
+    print("bacnground bias:%s" % str(bg_bias))
     print("all data       :"+str(len(data)))
     np.save(data_path, npdata)
     np.save(val_path, npval)
     print("data.npy and val.npy saved.")
 
     logfile = open(os.path.join(data_dir, logfile_name), "a")
-    print("img dir:%s" %img_dir, file=logfile)
+    print("training img dir:%s" %img_dir, file=logfile)
     print("vehicle data   :"+str(len(vehicle_images)), file=logfile)
     print("background data:"+str(len(bg_images)), file=logfile)
+    print("bacnground bias:%s" % str(bg_bias), file=logfile)
     print("all data       :"+str(len(data)), file=logfile)
 
     if len(data_)>0:
