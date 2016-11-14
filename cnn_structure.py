@@ -11,6 +11,7 @@ import time
 from datetime import datetime
 import cv2 as cv
 import os
+from graph import genGraph
 
 class vehicle_classify_CNN(Chain):
     def __init__(self):
@@ -28,23 +29,23 @@ class vehicle_classify_CNN(Chain):
         return y
 
 def cnn_train():
-    modelload = True  # 既存のモデルを読み込んでトレーニング
+    modelload = False  # 既存のモデルを読み込んでトレーニング
 
-    model_dir = "model"
+    model_dir = "model/yangon_vd_161114"
     model_name = "gradient_cnn.npz"
     optimizer_name = "gradient_optimizer.npz"
     logfile_name = "cnn_train.log"
 
     trainlog_dir = "trainlog"
 
-    data_dir = "data"
+    data_dir = "data/yangon_vd_161114"
     data_name = "data.npy"
     val_name = "val.npy"
     meanimg_name = "mean_image.npy"
 
     batchsize = 100
-    epoch = 3
-    N = 100000 #split data into training and validation
+    epoch = 200
+    N = 20000 #split data into training and validation
 
     model_path = os.path.join(model_dir, model_name)
     optimizer_path = os.path.join(model_dir, optimizer_name)
@@ -59,7 +60,7 @@ def cnn_train():
         print("Process aborted.")
         return
 
-    if not os.path.isdir(trainlog_path): os.mkdir(trainlog_path)
+    if not os.path.isdir(trainlog_path): os.makedirs(trainlog_path)
 
     logfile = open(logfile_path, "a")
     date = datetime.now()
@@ -126,6 +127,8 @@ def cnn_train():
     meanimg_savepath = root + f_startdate + "." + ext
     meanimg_savepath = os.path.join(model_dir, meanimg_savepath)
     np.save(meanimg_savepath, mean_image)
+
+    genGraph(trainlog_path)
 
     exec_time = time.time() - exec_time
     print("exex time:%f sec"% exec_time)
