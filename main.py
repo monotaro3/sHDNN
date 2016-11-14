@@ -48,15 +48,18 @@ class slidingwindow():
         #step = self.slidestep / math.sqrt((centerX - (img_xmax - img_xmin)/2)**2 + (centerY - (img_ymax - img_ymin)/2)**2)
         #self.x , self.y = self.x + int(centerX -  (img_xmax - img_xmin)/2)*step, self.y + int(centerY - (img_ymax - img_ymin)/2)*step #move as much as slidestep
 
-    def draw(self,img):
-        if self.result == 1 and self.vehiclecover == True: #True Positive with red
-            cv.rectangle(img, (self.x, self.y), (self.x+self.windowsize-1, self.y+self.windowsize-1), (0, 0, 255))
-        elif self.result == 0 and self.vehiclecover == True: #False Negative with green
-            cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
-                         (0, 255, 0))
-        elif self.result == 1 and self.vehiclecover == False: #False Positive with blue
-            cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
-                         (255, 0, 0))
+    def draw(self,img, flags):
+        if flags["FN"]:
+            if self.result == 0 and self.vehiclecover == True: #False Negative with green
+                cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
+                             (0, 255, 0))
+        if flags["TP"]:
+            if self.result == 1 and self.vehiclecover == True: #True Positive with red
+                cv.rectangle(img, (self.x, self.y), (self.x+self.windowsize-1, self.y+self.windowsize-1), (0, 0, 255))
+        if flags["FP"]:
+            if self.result == 1 and self.vehiclecover == False: #False Positive with blue
+                cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
+                             (255, 0, 0))
 
     def draw_(self,img):
         cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
@@ -272,12 +275,12 @@ def predictor(data,cnn_path,batch,gpu = 0):
     return results
 
 def main():
-    imgpath = "../vehicle_detection/images/test/mikawaharbor2.tif"  # 単一ファイル処理
+    imgpath = "C:/work/gspace_yangon/vehicle/test/yangon_test1.tif"  # 単一ファイル処理
     showImage = True  # 処理後画像表示　ディレクトリ内処理の場合はオフ
     procDIR = False  # ディレクトリ内ファイル一括処理
     test_dir = "../vehicle_detection/images/test/"
-    result_dir = "../vehicle_detection/images/result/"
-    cnn_dir = "model"#"C:/work/PycharmProjects/gradient_slide_cnn/model/"
+    result_dir = "" #""../vehicle_detection/images/result/"
+    cnn_dir = "model/yangon_vd_161114"
     cnn_classifier = "gradient_cnn.npz"
     cnn_optimizer = "gradient_optimizer.npz"
     gpuEnable = 1 #1:有効化
@@ -345,6 +348,20 @@ def main():
         all_exec_time = time.time()
     else:
         img_files.append(imgpath)
+
+    logfile = open(logfile_path, "a")
+    print("CNN classifire dir:%s" % cnn_dir)
+    print("GPU Enable:%d" % gpuEnable)
+    print("Batchsize:%d" % batchsize)
+    print("Enlarge Factor:%f" %efactor)
+    print("Min Window Distance:%f" %locatedistance)
+
+    print("CNN classifire dir:%s" % cnn_dir, file=logfile)
+    print("GPU Enable:%d" % gpuEnable, file=logfile)
+    print("Batchsize:%d" % batchsize, file=logfile)
+    print("Enlarge Factor:%f" %efactor, file=logfile)
+    print("Min Window Distance:%f" %locatedistance, file=logfile)
+    logfile.close()
 
     for imgpath in img_files:
 
@@ -466,13 +483,17 @@ def main():
         TP,TN,FP,FN = 0,0,0,0
         detectobjects = 0
 
+        result_img1 = np.array(img)
+        result_img2 = np.array(img)
+
         for i in slidewindows:
             if i.result == 1 and i.vehiclecover == True:TP += 1
             elif i.result == 0 and i.vehiclecover == False:TN += 1
             elif i.result == 1 and i.vehiclecover == False:FP += 1
             else:FN += 1
             if i.result == 1:detectobjects += 1
-            i.draw(img)
+            i.draw(result_img1, {"TP":True, "FP":True, "FN":True})
+            i.draw(result_img2, {"TP": True, "FP": True, "FN": False})
 
         exec_time = time.time() - exec_time
 
@@ -498,10 +519,13 @@ def main():
 
         img_bsname = os.path.basename(imgpath) #結果画像出力
         root,exe = os.path.splitext(img_bsname)
-        result_img = os.path.join(result_dir, root + "_sHDNN_" + f_startdate + ".jpg")
-        cv.imwrite(result_img,img)
+        result_img1_path = os.path.join(result_dir, root + "_sHDNN_TP_FP_FN" + f_startdate + ".jpg")
+        cv.imwrite(result_img1_path,result_img1)
+        result_img2_path = os.path.join(result_dir, root + "_sHDNN_TP_FP" + f_startdate + ".jpg")
+        cv.imwrite(result_img2_path,result_img2)
 
         if not(procDIR) and showImage: #結果画像表示
+            img = result_img1
             w = 0.6
             x,y,c = img.shape
             x = int(x*w)
