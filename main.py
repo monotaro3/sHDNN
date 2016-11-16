@@ -110,10 +110,21 @@ def calccentroid(img):
     int_y_sum = 0
     center_x = int(x/2)
     center_y = int(y/2)
+
+    x_mask = np.empty(img.shape)
+    y_mask = np.empty(img.shape)
     for i in range(0,x):
-        for j in range(0,y):
-            int_x_sum += i * img[i,j]
-            int_y_sum += j * img[i,j]
+        x_mask[i,:] = i
+    for i in range(0,y):
+        y_mask[:,i] = i
+    int_x_sum = (img * x_mask).sum()
+    int_y_sum = (img * y_mask).sum()
+
+    # for i in range(0,x):
+    #     for j in range(0,y):
+    #         int_x_sum += i * img[i,j]
+    #         int_y_sum += j * img[i,j]
+
     if img.sum() != 0:
         center_x = int(int_x_sum / img.sum())
         center_y = int(int_y_sum / img.sum())
