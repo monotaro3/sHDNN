@@ -28,6 +28,10 @@ class slidingwindow():
         self.vehiclecover = False
         self.locatedistance = locatedistance
         self.result = None
+        self.mesh_idx_x = None
+        self.mesh_idx_y = None
+        self.overlap = 0
+        self.overlap_windows = []
 
         self.movetocentroid(img)
         self.x -= int((self.windowsize * efactor - self.windowsize)/2)
@@ -155,7 +159,7 @@ def makeslidingwindows(img,windowsize,slide_param,slide=0.5): #input image:grays
             slidewindows.append(slidingwindow(img,j*step,i*step,windowsize,efactor=slide_param["efactor"],locatedistance=slide_param["locatedistance"]))
     return slidewindows
 
-def getslidewindows(img,windowsize,meshsize, slide_param, slide=0.5,mindistance = 0.15,thre1 = 60,thre2 = 100,searchrange = 5):
+def getslidewindows(img,windowsize,meshsize, slide_param,overlap_sort_reverse, slide=0.5,mindistance = 0.15,thre1 = 60,thre2 = 100,searchrange = 5):
     img_thre1 = img_thresholding(img,thre1,0)
     img_thre2 = img_thresholding(img,thre2,1)
     img_org = calcgrad(img)
@@ -190,48 +194,106 @@ def getslidewindows(img,windowsize,meshsize, slide_param, slide=0.5,mindistance 
     # print("finished.(%.3f seconds)" %time_makingslides)
     print("discarding repetitive images...")
     img_height, img_width, channel = img.shape
-    step = int(windowsize * slide)
-    width = math.ceil(img_width/step)
-    height = math.ceil(img_height/step)
-    for i in range(len(windows1)):
-        posX = i % width
-        posY = int((i - posX)/width)
-        xmin,ymin,xmax,ymax = posX-searchrange,posY-searchrange,posX+searchrange,posY+searchrange
-        if xmin < 0:xmin = 0
-        if ymin <0:ymin = 0
-        if xmax >= width:xmax = width - 1
-        if ymax >= height:ymax = height - 1
-        for j in range(ymin,ymax+1):
-            for k in range(xmin,xmax+1):
-                l = j*width+k
-                if windows1[i].repeat == False:
-                    if i != l:
-                        if math.sqrt((windows1[i].x - windows1[l].x)**2 + (windows1[i].y - windows1[l].y)**2) < windowsize * mindistance:
-                            windows1[l].repeat = True
-                    if math.sqrt((windows1[i].x - windows2[l].x)**2 + (windows1[i].y - windows2[l].y)**2) < windowsize * mindistance:
-                        windows2[l].repeat = True
-                    if math.sqrt((windows1[i].x - windows3[l].x) ** 2 + (windows1[i].y - windows3[l].y) ** 2) < windowsize * mindistance:
-                        windows3[l].repeat = True
-                if windows2[i].repeat == False:
-                    if i != l:
-                        if math.sqrt((windows2[i].x - windows2[l].x) ** 2 + (
-                            windows2[i].y - windows2[l].y) ** 2) < windowsize * mindistance:
-                            windows2[l].repeat = True
-                    if math.sqrt((windows2[i].x - windows3[l].x) ** 2 + (
-                        windows2[i].y - windows3[l].y) ** 2) < windowsize * mindistance:
-                        windows3[l].repeat = True
-                if windows3[i].repeat == False:
-                    if i != l:
-                        if math.sqrt((windows3[i].x - windows3[l].x) ** 2 + (
-                                    windows3[i].y - windows3[l].y) ** 2) < windowsize * mindistance:
-                            windows3[l].repeat = True
+
+    windowsize = int(round(windowsize*slide_param["efactor"]))
+    h_windowsize = int(math.ceil(windowsize/2))
+    r_windows = windows1 + windows2 + windows3
+    m_width = int(math.ceil(img_width/h_windowsize))
+    m_height = int(math.ceil(img_height/h_windowsize))
+    r_meshsize = m_width * m_height
+    r_mesh = []
+    for i in range(r_meshsize):
+        r_mesh.append([])
+    for i in r_windows:
+        center_x = i.x + h_windowsize - 1
+        center_y = i.y + h_windowsize - 1
+        if center_x < 0: center_x = 0
+        if center_y < 0: center_y = 0
+        if center_x >= img_width: center_x = img_width - 1
+        if center_y >= img_height: center_y = img_height - 1
+        idx_x = int(math.floor(center_x / h_windowsize))
+        idx_y = int(math.floor(center_y / h_windowsize))
+        i.mesh_idx_x = idx_x
+        i.mesh_idx_y = idx_y
+        r_mesh[m_width * idx_y + idx_x].append(i)
+    for i in r_windows:
+        idx_width = [i.mesh_idx_x]
+        idx_height = [i.mesh_idx_y]
+        if i.mesh_idx_x != 0: idx_width.append(i.mesh_idx_x - 1)
+        if i.mesh_idx_x != m_width - 1: idx_width.append(i.mesh_idx_x + 1)
+        if i.mesh_idx_y != 0: idx_height.append(i.mesh_idx_y - 1)
+        if i.mesh_idx_y != m_height - 1: idx_height.append(i.mesh_idx_y + 1)
+        search_idx = []
+        for k in idx_width:
+            for l in idx_height:
+                if not (k == i.mesh_idx_x and l == i.mesh_idx_y):
+                    search_idx.append([k,l])
+        for j in r_mesh[m_width * i.mesh_idx_y + i.mesh_idx_x]:
+            if i is not j:
+                if math.sqrt((i.x - j.x) ** 2 + (i.y - j.y) ** 2) < windowsize * mindistance:
+                    i.overlap += 1
+                    j.overlap += 1
+                    i.overlap_windows.append(j)
+                    j.overlap_windows.append(i)
+        for k in search_idx:
+            for j in r_mesh[m_width * k[1] + k[0]]:
+                if math.sqrt((i.x - j.x) ** 2 + (i.y - j.y) ** 2) < windowsize * mindistance:
+                    i.overlap += 1
+                    j.overlap += 1
+                    i.overlap_windows.append(j)
+                    j.overlap_windows.append(i)
+    r_windows.sort(key=lambda x: x.overlap,reverse=overlap_sort_reverse)
+    for i in r_windows:
+        if i.repeat == False:
+            for j in i.overlap_windows:
+                j.repeat = True
     slidewindows = []
-    for i in windows1:
-        if i.repeat == False:slidewindows.append(i)
-    for i in windows2:
-        if i.repeat == False:slidewindows.append(i)
-    for i in windows3:
-        if i.repeat == False:slidewindows.append(i)
+    for i in r_windows:
+        if i.repeat == False:
+            slidewindows.append(i)
+
+    # step = int(windowsize * slide)
+    # width = math.ceil(img_width/step)
+    # height = math.ceil(img_height/step)
+    # for i in range(len(windows1)):
+    #     posX = i % width
+    #     posY = int((i - posX)/width)
+    #     xmin,ymin,xmax,ymax = posX-searchrange,posY-searchrange,posX+searchrange,posY+searchrange
+    #     if xmin < 0:xmin = 0
+    #     if ymin <0:ymin = 0
+    #     if xmax >= width:xmax = width - 1
+    #     if ymax >= height:ymax = height - 1
+    #     for j in range(ymin,ymax+1):
+    #         for k in range(xmin,xmax+1):
+    #             l = j*width+k
+    #             if windows1[i].repeat == False:
+    #                 if i != l:
+    #                     if math.sqrt((windows1[i].x - windows1[l].x)**2 + (windows1[i].y - windows1[l].y)**2) < windowsize * mindistance:
+    #                         windows1[l].repeat = True
+    #                 if math.sqrt((windows1[i].x - windows2[l].x)**2 + (windows1[i].y - windows2[l].y)**2) < windowsize * mindistance:
+    #                     windows2[l].repeat = True
+    #                 if math.sqrt((windows1[i].x - windows3[l].x) ** 2 + (windows1[i].y - windows3[l].y) ** 2) < windowsize * mindistance:
+    #                     windows3[l].repeat = True
+    #             if windows2[i].repeat == False:
+    #                 if i != l:
+    #                     if math.sqrt((windows2[i].x - windows2[l].x) ** 2 + (
+    #                         windows2[i].y - windows2[l].y) ** 2) < windowsize * mindistance:
+    #                         windows2[l].repeat = True
+    #                 if math.sqrt((windows2[i].x - windows3[l].x) ** 2 + (
+    #                     windows2[i].y - windows3[l].y) ** 2) < windowsize * mindistance:
+    #                     windows3[l].repeat = True
+    #             if windows3[i].repeat == False:
+    #                 if i != l:
+    #                     if math.sqrt((windows3[i].x - windows3[l].x) ** 2 + (
+    #                                 windows3[i].y - windows3[l].y) ** 2) < windowsize * mindistance:
+    #                         windows3[l].repeat = True
+    # slidewindows = []
+    # for i in windows1:
+    #     if i.repeat == False:slidewindows.append(i)
+    # for i in windows2:
+    #     if i.repeat == False:slidewindows.append(i)
+    # for i in windows3:
+    #     if i.repeat == False:slidewindows.append(i)
 
     mesh_width = math.ceil(img_width/meshsize)
     mesh_height = math.ceil(img_height/meshsize)
@@ -288,10 +350,10 @@ def predictor(data,cnn_path,batch,gpu = 0):
 def main():
     imgpath = "C:/work/gspace_yangon/vehicle/test/yangon_test1.tif"  # 単一ファイル処理
     showImage = True  # 処理後画像表示　ディレクトリ内処理の場合はオフ
-    procDIR = False  # ディレクトリ内ファイル一括処理
+    procDIR = True  # ディレクトリ内ファイル一括処理
     test_dir = "../vehicle_detection/images/test/"
     result_dir = "" #""../vehicle_detection/images/result/"
-    cnn_dir = "model/yangon_vd_161114"
+    cnn_dir = "model/2016090910_35_3000"
     cnn_classifier = "gradient_cnn.npz"
     cnn_optimizer = "gradient_optimizer.npz"
     gpuEnable = 1 #1:有効化
@@ -304,6 +366,8 @@ def main():
 
     efactor = 1.414
     locatedistance = 0.45
+
+    overlap_sort_reverse = False
 
     if result_dir == "":
         if procDIR: result_dir = test_dir
@@ -365,13 +429,15 @@ def main():
     print("GPU Enable:%d" % gpuEnable)
     print("Batchsize:%d" % batchsize)
     print("Enlarge Factor:%f" %efactor)
-    print("Min Window Distance:%f" %locatedistance)
+    print("Positive Window Distance:%f" %locatedistance)
+    print("Overlap Sort Reverse:%s" % str(overlap_sort_reverse))
 
     print("CNN classifire dir:%s" % cnn_dir, file=logfile)
     print("GPU Enable:%d" % gpuEnable, file=logfile)
     print("Batchsize:%d" % batchsize, file=logfile)
     print("Enlarge Factor:%f" %efactor, file=logfile)
-    print("Min Window Distance:%f" %locatedistance, file=logfile)
+    print("Positive Window Distance:%f" %locatedistance, file=logfile)
+    print("Overlap Sort Reverse:%s" % str(overlap_sort_reverse), file=logfile)
     logfile.close()
 
     for imgpath in img_files:
@@ -405,7 +471,7 @@ def main():
         print("making sliding windows for each gradient image...")
         print("making sliding windows for each gradient image...",file=logfile)
         start = time.time()
-        slidewindows, slidewindows_mesh = getslidewindows(img,init_slidewindowsize,meshsize,slide_param)
+        slidewindows, slidewindows_mesh = getslidewindows(img,init_slidewindowsize,meshsize,slide_param,overlap_sort_reverse)
         end = time.time()
         time_makingslides = end - start
         print("finished.(%.3f seconds)" % time_makingslides)

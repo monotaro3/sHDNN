@@ -29,7 +29,7 @@ def make_rotated_bboximg(bbox,img,bboxes_img,angles,dataset_img_size):
     for angle in angles:
         l_img = img[ymin:ymax+1,xmin:xmax+1,:] #opencvの座標系に直す
         d_size = (l_img.shape[1],l_img.shape[0])
-        center = (int(d_size[0] / 2), int(d_size[1] / 2))
+        center = (int(math.ceil(d_size[0] / 2)), int(math.ceil(d_size[1] / 2)))
         rmat = cv.getRotationMatrix2D(center,angle,1.0)
         l_img_r = cv.warpAffine(l_img,rmat,d_size)
         img_r = l_img_r[diff_height:-diff_height,diff_width:-diff_width,:]
