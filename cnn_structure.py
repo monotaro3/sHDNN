@@ -116,6 +116,12 @@ def cnn_train():
     trainer.extend(extensions.PrintReport(["epoch","main/accuracy","validation/main/accuracy"]))
     trainer.extend(extensions.ProgressBar())
 
+    #save snapshot of model and optimizer
+    snapshot_interval = (200,"epoch")
+    trainer.extend(extensions.snapshot(), trigger=snapshot_interval)
+    trainer.extend(extensions.snapshot_object(model, 'model_epoch_{.updater.epoch}'), trigger=snapshot_interval)
+    trainer.extend(extensions.snapshot_object(optimizer, 'optimizer_epoch_{.updater.epoch}'), trigger=snapshot_interval)
+
     trainer.run()
 
     model.to_cpu()
@@ -124,7 +130,7 @@ def cnn_train():
 
     np.save(os.path.join(model_dir, meanimg_name), mean_image) #平均画像の保存
     root, ext = os.path.splitext(meanimg_name)
-    meanimg_savepath = root + f_startdate + "." + ext
+    meanimg_savepath = root + f_startdate + ext
     meanimg_savepath = os.path.join(model_dir, meanimg_savepath)
     np.save(meanimg_savepath, mean_image)
 

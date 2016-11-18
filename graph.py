@@ -1,9 +1,14 @@
 #!coding:utf-8
 
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import os
+import logging
 
 def genGraph(log_dir):
+    print(__name__)
+    logger = logging.getLogger("__main__")
 
     tmp = os.listdir(log_dir)
     logfiles = sorted([os.path.join(log_dir, x) for x in tmp if os.path.isfile(os.path.join(log_dir, x))])
@@ -25,7 +30,12 @@ def genGraph(log_dir):
 
     for logfile in logfiles: # for training accuracy
         f = open(logfile, "r")
-        line = f.readline()
+        try:
+            line = f.readline()
+        except:
+            logger.error("can't read line")
+            return
+
         while(line):
             if line.find("\"main/accuracy\"") > -1:
                 start = line.find(":") + 1
@@ -58,8 +68,18 @@ def genGraph(log_dir):
     plt.subplots_adjust(right=0.7)
     plt.savefig(fig_path)
     #plt.show()
+    logger.debug("Graph was generated succesfully.")
 
 if __name__ == "__main__":
-    log_dir = "C:/work/sHDNN/model/yangon_vd_161114/trainlog"
+    log_dir = "C:/work/sHDNN/model/vd_bg35_rot_noBING/trainlog"
+
+    logger = logging.getLogger(__name__)
+    s_handler = logging.StreamHandler()
+    s_handler.setLevel(logging.DEBUG)
+    f_handler = logging.FileHandler(os.path.join(log_dir,"graph.log"))
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(s_handler)
+    logger.addHandler(f_handler)
+
     genGraph(log_dir)
 
