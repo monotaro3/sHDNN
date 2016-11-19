@@ -90,6 +90,10 @@ class slidingwindow():
         else:
             return False
 
+    def getCenter(self):
+        self.center = self.x + int(math.ceil(self.windowsize / 2)), self.y + int(math.ceil(self.windowsize / 2))
+        return self.center
+
 def _calcgrad(img):
     grad_x = cv.Sobel(img, cv.CV_64F, 1, 0, 1)
     grad_y = cv.Sobel(img, cv.CV_64F, 0, 1, 1)
@@ -348,9 +352,9 @@ def predictor(data,cnn_path,batch,gpu = 0):
     return results
 
 def main():
-    imgpath = "C:/work/gspace_yangon/vehicle/test/yangon_test1.tif"  # 単一ファイル処理
-    showImage = True  # 処理後画像表示　ディレクトリ内処理の場合はオフ
-    procDIR = True  # ディレクトリ内ファイル一括処理
+    imgpath = "C:/work/vehicle_detection/images/raw/ionfukuoka_Z19.tif"  # 単一ファイル処理
+    showImage = False  # 処理後画像表示　ディレクトリ内処理の場合はオフ
+    procDIR = False  # ディレクトリ内ファイル一括処理
     test_dir = "../vehicle_detection/images/test/"
     result_dir = "" #""../vehicle_detection/images/result/"
     cnn_dir = "model/2016090910_35_3000"
@@ -362,12 +366,13 @@ def main():
     mean_image_file = "mean_image.npy"
     logfile_name = "gradient_cnn.log"
 
-    meshsize = 50
-
     efactor = 1.414
     locatedistance = 0.45
 
     overlap_sort_reverse = False
+    meshsize = 50
+
+    geoRef = True
 
     if result_dir == "":
         if procDIR: result_dir = test_dir
@@ -579,7 +584,8 @@ def main():
         print("GroundTruth vehicles    :%d" % len(vehicle_detected))
         print("detected objects        :%d" % detectobjects)
         print("PR(d vehicles/d objects):%d/%d %f" %(vehicle_detected.count(True),detectobjects,vehicle_detected.count(True)/detectobjects))
-        print("RR(detected vehicles)   :%d/%d %f" % (vehicle_detected.count(True),len(vehicle_detected),vehicle_detected.count(True)/len(vehicle_detected)))
+        print("RR(detected vehicles)   :%d/%d %f" % (vehicle_detected.count(True),len(vehicle_detected),\
+                                                     (vehicle_detected.count(True)/len(vehicle_detected) if len(vehicle_detected) != 0 else 0)))
         print("TP,TN,FP,FN             :%d,%d,%d,%d" % (TP, TN, FP, FN))
         print("")
 
@@ -588,18 +594,44 @@ def main():
         print("GroundTruth vehicles    :%d" % len(vehicle_detected),file=logfile)
         print("detected objects        :%d" % detectobjects,file=logfile)
         print("PR(d vehicles/d objects):%d/%d %f" %(vehicle_detected.count(True),detectobjects,vehicle_detected.count(True)/detectobjects),file=logfile)
-        print("RR(detected vehicles)   :%d/%d %f" % (vehicle_detected.count(True),len(vehicle_detected),vehicle_detected.count(True)/len(vehicle_detected)),file=logfile)
+        print("RR(detected vehicles)   :%d/%d %f" % (vehicle_detected.count(True),len(vehicle_detected),\
+                                                     (vehicle_detected.count(True)/len(vehicle_detected) if len(vehicle_detected) != 0 else 0)),file=logfile)
         print("TP,TN,FP,FN             :%d,%d,%d,%d" % (TP, TN, FP, FN),file=logfile)
         print("",file=logfile)
 
         logfile.close()
 
-        img_bsname = os.path.basename(imgpath) #結果画像出力
-        root,exe = os.path.splitext(img_bsname)
-        result_img1_path = os.path.join(result_dir, root + "_sHDNN_TP_FP_FN" + f_startdate + ".jpg")
-        cv.imwrite(result_img1_path,result_img1)
-        result_img2_path = os.path.join(result_dir, root + "_sHDNN_TP_FP" + f_startdate + ".jpg")
-        cv.imwrite(result_img2_path,result_img2)
+        img_bsname = os.path.basename(imgpath)  # 結果画像出力
+        root, exe = os.path.splitext(img_bsname)
+        exe = ".tif" if geoRef else ".jpg"
+        result_img1_path = os.path.join(result_dir, root + "_sHDNN_TP_FP_FN" + f_startdate + exe)
+        result_img2_path = os.path.join(result_dir, root + "_sHDNN_TP_FP" + f_startdate + exe)
+        shpdir = os.path.join(result_dir,"shp")
+        shppath = os.path.join(shpdir, root + "sHDNN_vc_detected" + f_startdate + ".shp")
+        if not os.path.isdir(shpdir):
+            os.makedirs(shpdir)
+
+        if geoRef:
+            from osgeo import gdal
+            from geoproc import saveGeoTiff, getCoords, savePointshapefile
+            gimg = gdal.Open(imgpath)
+            SpaRef = gimg.GetProjection()
+            geoTransform = gimg.GetGeoTransform()
+            if SpaRef == "":
+                geoRef = False
+                break
+            saveGeoTiff(result_img1,result_img1_path,geoTransform,SpaRef)
+            saveGeoTiff(result_img2, result_img2_path,geoTransform,SpaRef)
+
+            vehicle_points_raw = []
+            for i in slidewindows:
+                if i.result == 1:vehicle_points_raw.append(i.getCenter())
+            vehicle_points = getCoords(geoTransform, vehicle_points_raw)
+            savePointshapefile(vehicle_points,"vehicles",SpaRef,shppath)
+
+        if not geoRef:
+            cv.imwrite(result_img1_path, result_img1)
+            cv.imwrite(result_img2_path,result_img2)
 
         if not(procDIR) and showImage: #結果画像表示
             img = result_img1

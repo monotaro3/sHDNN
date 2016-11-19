@@ -71,7 +71,7 @@ def genGraph(log_dir):
     logger.debug("Graph was generated succesfully.")
 
 if __name__ == "__main__":
-    log_dir = "C:/work/sHDNN/model/vd_bg35_rot_noBING/trainlog"
+    log_dir = "C:/work/sHDNN/model/vd_bg35_norot_noBING/trainlog"
 
     logger = logging.getLogger(__name__)
     s_handler = logging.StreamHandler()
