@@ -13,6 +13,7 @@ import chainer.links as L
 from chainer.training import extensions
 from chainer.datasets import tuple_dataset
 from datetime import datetime
+import logging
 #from original source
 from make_datasets import make_bboxeslist
 from cnn_structure import vehicle_classify_CNN
@@ -53,17 +54,21 @@ class slidingwindow():
         #self.x , self.y = self.x + int(centerX -  (img_xmax - img_xmin)/2)*step, self.y + int(centerY - (img_ymax - img_ymin)/2)*step #move as much as slidestep
 
     def draw(self,img, flags):
-        if flags["FN"]:
-            if self.result == 0 and self.vehiclecover == True: #False Negative with green
-                cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
-                             (0, 255, 0))
-        if flags["TP"]:
-            if self.result == 1 and self.vehiclecover == True: #True Positive with red
-                cv.rectangle(img, (self.x, self.y), (self.x+self.windowsize-1, self.y+self.windowsize-1), (0, 0, 255))
-        if flags["FP"]:
-            if self.result == 1 and self.vehiclecover == False: #False Positive with blue
-                cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
-                             (255, 0, 0))
+        if flags == "TESTONLY":
+            cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
+                             (150, 150, 150))
+        else:
+            if flags["FN"]:
+                if self.result == 0 and self.vehiclecover == True: #False Negative with green
+                    cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
+                                 (0, 255, 0))
+            if flags["TP"]:
+                if self.result == 1 and self.vehiclecover == True: #True Positive with red
+                    cv.rectangle(img, (self.x, self.y), (self.x+self.windowsize-1, self.y+self.windowsize-1), (0, 0, 255))
+            if flags["FP"]:
+                if self.result == 1 and self.vehiclecover == False: #False Positive with blue
+                    cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
+                                 (255, 0, 0))
 
     def draw_(self,img):
         cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
@@ -352,27 +357,28 @@ def predictor(data,cnn_path,batch,gpu = 0):
     return results
 
 def main():
-    imgpath = "C:/work/vehicle_detection/images/raw/ionfukuoka_Z19.tif"  # 単一ファイル処理
-    showImage = False  # 処理後画像表示　ディレクトリ内処理の場合はオフ
+    TestOnly = False
     procDIR = False  # ディレクトリ内ファイル一括処理
+    showImage = False  # 処理後画像表示　ディレクトリ内処理の場合はオフ
+    imgpath = "C:/work/vehicle_detection/images/test/kurume_yumetown.tif"  # 単一ファイル処理
     test_dir = "../vehicle_detection/images/test/"
     result_dir = "" #""../vehicle_detection/images/result/"
     cnn_dir = "model/2016090910_35_3000"
     cnn_classifier = "gradient_cnn.npz"
     cnn_optimizer = "gradient_optimizer.npz"
-    gpuEnable = 1 #1:有効化
-    batchsize = 50
     mean_image_dir = ""
     mean_image_file = "mean_image.npy"
     logfile_name = "gradient_cnn.log"
-
+    windowsize_default = 35 #18,35
+    gpuEnable = 1  # 1:有効化
+    batchsize = 50
     efactor = 1.414
     locatedistance = 0.45
-
     overlap_sort_reverse = False
     meshsize = 50
 
     geoRef = True
+    shpOutput = True
 
     if result_dir == "":
         if procDIR: result_dir = test_dir
@@ -382,20 +388,29 @@ def main():
     cnn_path = [cnn_dir, cnn_classifier, cnn_optimizer]
     slide_param ={"efactor":efactor, "locatedistance":locatedistance}
 
-
-    #slidewindowsize = 35 #18,35
-
-
-    img_files = []
-    img_files_ignored = []
-
     date = datetime.now()
     startdate = date.strftime('%Y/%m/%d %H:%M:%S')
     f_startdate = date.strftime('%Y%m%d_%H%M%S')
-    result_dir = os.path.join(result_dir,"result_sHDNN_"+f_startdate)
+    result_dir = os.path.join(result_dir, "result_sHDNN_" + f_startdate)
     logfile_path = os.path.join(result_dir, logfile_name)
     if not os.path.isdir(result_dir):
         os.makedirs(result_dir)
+
+    logger = logging.getLogger(__name__)
+    s_handler = logging.StreamHandler()
+    s_handler.setLevel(logging.DEBUG)
+    f_handler = logging.FileHandler(logfile_path)
+    f_handler.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(s_handler)
+    logger.addHandler(f_handler)
+
+    logger.debug("All Execution Start:" + startdate)
+    logger.debug("Test Only          :%s", str(TestOnly))
+    logger.debug("Process Directory  :%s",str(procDIR))
+
+    img_files = []
+    img_files_ignored = []
 
     if procDIR: #処理可の画像ファイルを確認
         tmp = os.listdir(test_dir)
@@ -405,45 +420,30 @@ def main():
             if ext == ".tif" or ext == ".jpg" or ext == ".png":
                 cfgpath = root + ".cfg"
                 gt_file = root + ".txt"
-                if os.path.isfile(cfgpath) and os.path.isfile(gt_file):
-                    img_files.append(i)
+                if not TestOnly:
+                    if not os.path.isfile(gt_file):
+                        logger.debug("No groundtruth file for validation: %s is ignored.", i)
+                        img_files_ignored.append(i)
+                    else:
+                        if not os.path.isfile(cfgpath):
+                            logger.warn("No windowsize .cfg: Default windowsize is used for %s.", i)
+                        img_files.append(i)
                 else:
-                    img_files_ignored.append(i)
-        logfile = open(logfile_path, "a")
-        print("all execution start:" + startdate)
-        print("all execution start:" + startdate,file=logfile)
-        print("%d target file(s):" % len(img_files))
-        print("%d target file(s):" % len(img_files),file=logfile)
+                    img_files.append(i)
+        logger.debug("%d target file(s):", len(img_files))
         for i in img_files:
-            print(" " + i)
-            print(" " + i,file=logfile)
-        print("%d ignored file(s):" % len(img_files_ignored))
-        print("%d ignored file(s):" % len(img_files_ignored),file=logfile)
-        for i in img_files_ignored:
-            print(" " + i)
-            print(" " + i,file=logfile)
-        print("")
-        print("",file=logfile)
-        logfile.close()
+            logger.debug(" " + i)
+        logger.debug("%d ignored file(s):", len(img_files_ignored))
         all_exec_time = time.time()
     else:
         img_files.append(imgpath)
 
-    logfile = open(logfile_path, "a")
-    print("CNN classifire dir:%s" % cnn_dir)
-    print("GPU Enable:%d" % gpuEnable)
-    print("Batchsize:%d" % batchsize)
-    print("Enlarge Factor:%f" %efactor)
-    print("Positive Window Distance:%f" %locatedistance)
-    print("Overlap Sort Reverse:%s" % str(overlap_sort_reverse))
-
-    print("CNN classifire dir:%s" % cnn_dir, file=logfile)
-    print("GPU Enable:%d" % gpuEnable, file=logfile)
-    print("Batchsize:%d" % batchsize, file=logfile)
-    print("Enlarge Factor:%f" %efactor, file=logfile)
-    print("Positive Window Distance:%f" %locatedistance, file=logfile)
-    print("Overlap Sort Reverse:%s" % str(overlap_sort_reverse), file=logfile)
-    logfile.close()
+    logger.debug("CNN classifier dir:%s", cnn_dir)
+    logger.debug("GPU Enable:%d", gpuEnable)
+    logger.debug("Batchsize:%d", batchsize)
+    logger.debug("Enlarge Factor:%f", efactor)
+    logger.debug("Positive Window Distance:%f", locatedistance)
+    logger.debug("Overlap Sort Reverse:%s", str(overlap_sort_reverse))
 
     for imgpath in img_files:
 
@@ -451,36 +451,35 @@ def main():
         startdate = date.strftime('%Y/%m/%d %H:%M:%S')
         f_startdate = date.strftime('%Y%m%d_%H%M%S')
 
-        logfile = open(logfile_path, "a")
-        print("execution:" + startdate)
-        print("execution:" + startdate,file=logfile)
+        logger.debug("Execution:" + startdate)
         exec_time = time.time()
 
-        print("image:"+imgpath)
-        print("image:" + imgpath,file=logfile)
+        logger.debug("Image: " + imgpath)
 
         img = cv.imread(imgpath)
-        print("img shape:"+str(img.shape))
-        print("img shape:" + str(img.shape),file=logfile)
+
+        logger.debug("img shape:"+str(img.shape))
 
         root,ext = os.path.splitext(imgpath)
         gt_file = root + ".txt"
         cfgpath = root+".cfg"
-        cfg = open(cfgpath,"r")
-        gtwindowsize = int(cfg.readline())
+        if not os.path.isfile(cfgpath):
+            logger.warn("No windowsize .cfg: Default windowsize %d is used for %s.", windowsize_default, imgpath)
+            gtwindowsize = windowsize_default
+        else:
+            cfg = open(cfgpath,"r")
+            gtwindowsize = int(cfg.readline())
         v_windowsize = gtwindowsize - 1
 
         init_slidewindowsize = int(round(gtwindowsize / efactor))
         slidewindowsize = int(round(init_slidewindowsize * efactor))
 
-        print("making sliding windows for each gradient image...")
-        print("making sliding windows for each gradient image...",file=logfile)
+        logger.debug("making sliding windows for each gradient image...")
         start = time.time()
         slidewindows, slidewindows_mesh = getslidewindows(img,init_slidewindowsize,meshsize,slide_param,overlap_sort_reverse)
         end = time.time()
         time_makingslides = end - start
-        print("finished.(%.3f seconds)" % time_makingslides)
-        print("finished.(%.3f seconds)" % time_makingslides,file=logfile)
+        logger.debug("finished.(%.3f seconds)" % time_makingslides)
 
         # img_ = np.array(img) #処理途中のスライドウィンドウ可視化
         # for i in slidewindows:
@@ -502,114 +501,95 @@ def main():
         npwindows = np.array(windowimgs,np.float32)
         #np.save("windows.npy",npwindows)
 
-        print("number of windows:%s size:%d" %(str(len(slidewindows)),slidewindowsize))
-        print("number of windows:%s size:%d" %(str(len(slidewindows)),slidewindowsize),file=logfile)
+        logger.debug("number of windows:%s size:%d",str(len(slidewindows)),slidewindowsize)
 
         mean_image = np.load(mean_image_path) #平均画像ロード
         npwindows -= mean_image
 
-        print("predicting windows...")
-        print("predicting windows...",file=logfile)
+        logger.debug("predicting windows...")
         start = time.time()
         results = predictor(npwindows,cnn_path,batchsize,gpu=gpuEnable)
         end = time.time()
         time_predicting = end - start
-        print("finished.(%.3f seconds)" % time_predicting)
-        print("finished.(%.3f seconds)" % time_predicting,file=logfile)
-
-        vehicle_list = make_bboxeslist(gt_file)
-        vehicle_detected = [False]*len(vehicle_list)
-
-        y, x, channel = img.shape
-        mesh_width = int(math.ceil(x / meshsize))
-        mesh_height = int(math.ceil(y / meshsize))
-
-        for i in vehicle_list:   #groundtruthの矩形を正方形に拡張
-            if (i[2]-i[0]) < v_windowsize:
-                if i[0] == 0:i[0] = i[2] - v_windowsize
-                else:i[2] = i[0] + v_windowsize
-            if (i[3] - i[1]) < v_windowsize:
-                if i[1] == 0:
-                    i[1] = i[3] - v_windowsize
-                else:
-                    i[3] = i[1] + v_windowsize
-
+        logger.debug("finished.(%.3f seconds)" % time_predicting)
         for i in range(len(slidewindows)):
             slidewindows[i].result = results[i]
 
-        print("analyzing results...")
-        print("analyzing results...",file=logfile)
-        start = time.time()
+        if TestOnly:
+            result_testonly = np.array(img)
+            for i in slidewindows:
+                i.draw(result_testonly,"TESTONLY")
+        else:  # Validating Detection result
+            logger.debug("analyzing results...")
+            start = time.time()
+            vehicle_list = make_bboxeslist(gt_file)
+            vehicle_detected = [False]*len(vehicle_list)
 
-        for i in range(len(vehicle_list)):
-            gt_x = int(math.floor(vehicle_list[i][0] - 1 + (vehicle_list[i][2] - vehicle_list[i][0] + 1)/2))
-            gt_y = int(math.floor(vehicle_list[i][1] - 1 + (vehicle_list[i][3] - vehicle_list[i][1] + 1)/2))
-            idx_width = [int(math.ceil(gt_x / meshsize))]
-            idx_height = [int(math.ceil(gt_y / meshsize))]
-            if idx_width[0] != 1:idx_width.append(idx_width[0]-1)
-            if idx_width[0] != mesh_width:idx_width.append(idx_width[0]+1)
-            if idx_height[0] != 1:idx_height.append(idx_height[0]-1)
-            if idx_height[0] != mesh_height:idx_height.append(idx_height[0]+1)
-            for k in idx_width:
-                for l in idx_height:
-                    for j in slidewindows_mesh[(l-1) * mesh_width + k - 1]:
-                        if j.cover(vehicle_list[i]):
-                            if j.result == 1:
-                                vehicle_detected[i] = True
+            y, x, channel = img.shape
+            mesh_width = int(math.ceil(x / meshsize))
+            mesh_height = int(math.ceil(y / meshsize))
 
-        end = time.time()
-        time_analysis = end - start
-        print('finished.(%.3f seconds)' % time_analysis)
-        print('finished.(%.3f seconds)' % time_analysis,file=logfile)
+            for i in vehicle_list:   #groundtruthの矩形を正方形に拡張
+                if (i[2]-i[0]) < v_windowsize:
+                    if i[0] == 0:i[0] = i[2] - v_windowsize
+                    else:i[2] = i[0] + v_windowsize
+                if (i[3] - i[1]) < v_windowsize:
+                    if i[1] == 0:
+                        i[1] = i[3] - v_windowsize
+                    else:
+                        i[3] = i[1] + v_windowsize
 
-        TP,TN,FP,FN = 0,0,0,0
-        detectobjects = 0
+            for i in range(len(vehicle_list)):
+                gt_x = int(math.floor(vehicle_list[i][0] - 1 + (vehicle_list[i][2] - vehicle_list[i][0] + 1)/2))
+                gt_y = int(math.floor(vehicle_list[i][1] - 1 + (vehicle_list[i][3] - vehicle_list[i][1] + 1)/2))
+                idx_width = [int(math.ceil(gt_x / meshsize))]
+                idx_height = [int(math.ceil(gt_y / meshsize))]
+                if idx_width[0] != 1:idx_width.append(idx_width[0]-1)
+                if idx_width[0] != mesh_width:idx_width.append(idx_width[0]+1)
+                if idx_height[0] != 1:idx_height.append(idx_height[0]-1)
+                if idx_height[0] != mesh_height:idx_height.append(idx_height[0]+1)
+                for k in idx_width:
+                    for l in idx_height:
+                        for j in slidewindows_mesh[(l-1) * mesh_width + k - 1]:
+                            if j.cover(vehicle_list[i]):
+                                if j.result == 1:
+                                    vehicle_detected[i] = True
 
-        result_img1 = np.array(img)
-        result_img2 = np.array(img)
+            end = time.time()
+            time_analysis = end - start
 
-        for i in slidewindows:
-            if i.result == 1 and i.vehiclecover == True:TP += 1
-            elif i.result == 0 and i.vehiclecover == False:TN += 1
-            elif i.result == 1 and i.vehiclecover == False:FP += 1
-            else:FN += 1
-            if i.result == 1:detectobjects += 1
-            i.draw(result_img1, {"TP":True, "FP":True, "FN":True})
-            i.draw(result_img2, {"TP": True, "FP": True, "FN": False})
+            logger.debug('finished.(%.3f seconds)' % time_analysis)
+
+            TP,TN,FP,FN = 0,0,0,0
+            detectobjects = 0
+
+            result_img1 = np.array(img)
+            result_img2 = np.array(img)
+
+            for i in slidewindows:
+                if i.result == 1 and i.vehiclecover == True:TP += 1
+                elif i.result == 0 and i.vehiclecover == False:TN += 1
+                elif i.result == 1 and i.vehiclecover == False:FP += 1
+                else:FN += 1
+                if i.result == 1:detectobjects += 1
+                i.draw(result_img1, {"TP":True, "FP":True, "FN":True})
+                i.draw(result_img2, {"TP": True, "FP": True, "FN": False})
+
+            PR = vehicle_detected.count(True)/detectobjects if detectobjects != 0 else None
+            RR = vehicle_detected.count(True)/len(vehicle_detected) if len(vehicle_detected) != 0 else None
 
         exec_time = time.time() - exec_time
 
-        print("---------result--------")
-        print("Overall Execution time  :%.3f seconds" % exec_time)
-        print("GroundTruth vehicles    :%d" % len(vehicle_detected))
-        print("detected objects        :%d" % detectobjects)
-        print("PR(d vehicles/d objects):%d/%d %f" %(vehicle_detected.count(True),detectobjects,vehicle_detected.count(True)/detectobjects))
-        print("RR(detected vehicles)   :%d/%d %f" % (vehicle_detected.count(True),len(vehicle_detected),\
-                                                     (vehicle_detected.count(True)/len(vehicle_detected) if len(vehicle_detected) != 0 else 0)))
-        print("TP,TN,FP,FN             :%d,%d,%d,%d" % (TP, TN, FP, FN))
-        print("")
+        logger.debug("---------result--------")
+        logger.debug("Overall Execution time  :%.3f seconds", exec_time)
+        logger.debug("Detected Objects        :%d", detectobjects)
 
-        print("---------result--------",file=logfile)  #to logfile
-        print("Overall Execution time  :%.3f seconds" % exec_time,file=logfile)
-        print("GroundTruth vehicles    :%d" % len(vehicle_detected),file=logfile)
-        print("detected objects        :%d" % detectobjects,file=logfile)
-        print("PR(d vehicles/d objects):%d/%d %f" %(vehicle_detected.count(True),detectobjects,vehicle_detected.count(True)/detectobjects),file=logfile)
-        print("RR(detected vehicles)   :%d/%d %f" % (vehicle_detected.count(True),len(vehicle_detected),\
-                                                     (vehicle_detected.count(True)/len(vehicle_detected) if len(vehicle_detected) != 0 else 0)),file=logfile)
-        print("TP,TN,FP,FN             :%d,%d,%d,%d" % (TP, TN, FP, FN),file=logfile)
-        print("",file=logfile)
+        if not TestOnly:
+            logger.debug("GroundTruth vehicles    :%d", len(vehicle_detected))
+            logger.debug("PR(d vehicles/d objects):%d/%d %s", vehicle_detected.count(True),detectobjects,str(PR))
+            logger.debug("RR(detected vehicles)   :%d/%d %s", vehicle_detected.count(True),len(vehicle_detected),str(RR))
+            logger.debug("TP,TN,FP,FN             :%d,%d,%d,%d", TP, TN, FP, FN)
 
-        logfile.close()
-
-        img_bsname = os.path.basename(imgpath)  # 結果画像出力
-        root, exe = os.path.splitext(img_bsname)
-        exe = ".tif" if geoRef else ".jpg"
-        result_img1_path = os.path.join(result_dir, root + "_sHDNN_TP_FP_FN" + f_startdate + exe)
-        result_img2_path = os.path.join(result_dir, root + "_sHDNN_TP_FP" + f_startdate + exe)
-        shpdir = os.path.join(result_dir,"shp")
-        shppath = os.path.join(shpdir, root + "sHDNN_vc_detected" + f_startdate + ".shp")
-        if not os.path.isdir(shpdir):
-            os.makedirs(shpdir)
 
         if geoRef:
             from osgeo import gdal
@@ -619,22 +599,43 @@ def main():
             geoTransform = gimg.GetGeoTransform()
             if SpaRef == "":
                 geoRef = False
-                break
-            saveGeoTiff(result_img1,result_img1_path,geoTransform,SpaRef)
-            saveGeoTiff(result_img2, result_img2_path,geoTransform,SpaRef)
 
-            vehicle_points_raw = []
-            for i in slidewindows:
-                if i.result == 1:vehicle_points_raw.append(i.getCenter())
-            vehicle_points = getCoords(geoTransform, vehicle_points_raw)
-            savePointshapefile(vehicle_points,"vehicles",SpaRef,shppath)
+        img_bsname = os.path.basename(imgpath)  # 結果画像出力
+        root, exe = os.path.splitext(img_bsname)
+        exe = ".tif" if geoRef else ".jpg"
+        result_testonly_path = os.path.join(result_dir, root + "_sHDNN_TESTONLY" + f_startdate + exe)
+        result_img1_path = os.path.join(result_dir, root + "_sHDNN_TP_FP_FN" + f_startdate + exe)
+        result_img2_path = os.path.join(result_dir, root + "_sHDNN_TP_FP" + f_startdate + exe)
+        shpdir = os.path.join(result_dir,"shp")
+        shppath = os.path.join(shpdir, root + "sHDNN_vc_detected" + f_startdate + ".shp")
+
+        if geoRef:
+            if TestOnly:
+                saveGeoTiff(result_testonly, result_testonly_path, geoTransform, SpaRef)
+            else:
+                saveGeoTiff(result_img1,result_img1_path,geoTransform,SpaRef)
+                saveGeoTiff(result_img2, result_img2_path,geoTransform,SpaRef)
+            if shpOutput:
+                if not os.path.isdir(shpdir):
+                    os.makedirs(shpdir)
+                vehicle_points_raw = []
+                for i in slidewindows:
+                    if i.result == 1:vehicle_points_raw.append(i.getCenter())
+                vehicle_points = getCoords(geoTransform, vehicle_points_raw)
+                savePointshapefile(vehicle_points,"vehicles",SpaRef,shppath)
 
         if not geoRef:
-            cv.imwrite(result_img1_path, result_img1)
-            cv.imwrite(result_img2_path,result_img2)
+            if TestOnly:
+                cv.imwrite(result_testonly_path,result_testonly)
+            else:
+                cv.imwrite(result_img1_path, result_img1)
+                cv.imwrite(result_img2_path,result_img2)
 
         if not(procDIR) and showImage: #結果画像表示
-            img = result_img1
+            if TestOnly:
+                img = result_testonly
+            else:
+                img = result_img1
             w = 0.6
             x,y,c = img.shape
             x = int(x*w)
@@ -645,11 +646,8 @@ def main():
             cv.destroyAllWindows()
 
     if procDIR:
-        logfile = open(logfile_path, "a")
         all_exec_time = time.time() - all_exec_time
-        print("all exec time:%.3f seconds" % all_exec_time)
-        print("all exec time:%.3f seconds" % all_exec_time, file=logfile)
-        logfile.close()
+        logger.debug("all exec time:%.3f seconds" % all_exec_time)
 
 if __name__ == "__main__":
     main()
