@@ -358,12 +358,12 @@ def predictor(data,cnn_path,batch,gpu = 0):
 
 def main():
     TestOnly = False
-    procDIR = False  # ディレクトリ内ファイル一括処理
+    procDIR = True  # ディレクトリ内ファイル一括処理
     showImage = False  # 処理後画像表示　ディレクトリ内処理の場合はオフ
     imgpath = "C:/work/vehicle_detection/images/test/kurume_yumetown.tif"  # 単一ファイル処理
     test_dir = "../vehicle_detection/images/test/"
-    result_dir = "" #""../vehicle_detection/images/result/"
-    cnn_dir = "model/2016090910_35_3000"
+    result_dir = "../vehicle_detection/images/test/sHDNN" #""../vehicle_detection/images/result/"
+    cnn_dir = "model/vd_bg35_norot_noBING/200epoch"
     cnn_classifier = "gradient_cnn.npz"
     cnn_optimizer = "gradient_optimizer.npz"
     mean_image_dir = ""
@@ -400,7 +400,7 @@ def main():
     s_handler = logging.StreamHandler()
     s_handler.setLevel(logging.DEBUG)
     f_handler = logging.FileHandler(logfile_path)
-    f_handler.setLevel(logging.INFO)
+    f_handler.setLevel(logging.DEBUG)
     logger.setLevel(logging.DEBUG)
     logger.addHandler(s_handler)
     logger.addHandler(f_handler)
