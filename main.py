@@ -323,9 +323,22 @@ def getslidewindows(img,windowsize,meshsize, slide_param,overlap_sort_reverse, s
     return slidewindows, slidewindows_mesh
 
 def predictor(data,cnn_path,batch,gpu = 0):
+    logger = logging.getLogger(__name__)
     cnn_classifier = os.path.join(cnn_path[0], cnn_path[1])
     cnn_optimizer = os.path.join(cnn_path[0], cnn_path[2])
-    model = L.Classifier(vehicle_classify_CNN())
+    root, exe = os.path.splitext(cnn_classifier)
+    modelname_file = root + "_modelname.txt"
+    try:
+        f = open(modelname_file, "r")
+        cnn_classname = f.readline()
+    except:
+        logger.warn("No cnn-class-name file. ""vehicle_classify_CNN"" will be used.")
+        cnn_classname = "vehicle_classify_CNN"
+    # load cnn class dynamically
+    mod = __import__("cnn_structure", fromlist=[cnn_classname])
+    class_def = getattr(mod, cnn_classname)
+    cnn_architecture = class_def()
+    model = L.Classifier(cnn_architecture)
     optimizer = optimizers.SGD()
     serializers.load_npz(cnn_classifier, model)
     optimizer.setup(model)

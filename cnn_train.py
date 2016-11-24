@@ -13,9 +13,10 @@ import cv2 as cv
 import os
 from graph import genGraph
 import cnn_structure
+import logging
 
 def cnn_train():
-    modelload = False  # 既存のモデルを読み込んでトレーニング
+    modelload = True # 既存のモデルを読み込んでトレーニング
 
     model_dir = "model/vd_bg35_rot_noBING_Adam_dropout1"
     model_name = "gradient_cnn.npz"
@@ -23,8 +24,10 @@ def cnn_train():
     logfile_name = "cnn_train.log"
 
     trainlog_dir = "trainlog"
-    snapshot_dir = "snapshot1000"
 
+    #if modelload == False:
+    cnn_architecture = cnn_structure.CNN_dropout1()
+    optimizer = optimizers.Adam()
 
     data_dir = "data/vd_bg35_rot_noBING"
     data_name = "data.npy"
@@ -32,11 +35,22 @@ def cnn_train():
     meanimg_name = "mean_image.npy"
 
     batchsize = 100
-    epoch = 1000
+    epoch = 1
     N = 140000 #split data into training and validation
 
-    model = L.Classifier(cnn_structure.CNN_dropout1())
-    optimizer = optimizers.Adam()
+    if modelload:
+        root, exe = os.path.splitext(model_name)
+        modelname_file = os.path.join(model_dir,root+"_modelname.txt")
+        f = open(modelname_file,"r")
+        cnn_classname = f.readline()
+        # load cnn class dynamically
+        mod = __import__("cnn_structure", fromlist=[cnn_classname])
+        class_def = getattr(mod, cnn_classname)
+        cnn_architecture = class_def()
+    else:
+        cnn_classname = cnn_architecture.__class__.__name__
+
+    model = L.Classifier(cnn_architecture)
 
     model_path = os.path.join(model_dir, model_name)
     optimizer_path = os.path.join(model_dir, optimizer_name)
@@ -45,9 +59,9 @@ def cnn_train():
     val_path = os.path.join(data_dir, val_name)
     meanimg_loadpath = os.path.join(data_dir, meanimg_name)
     trainlog_path = os.path.join(model_dir, trainlog_dir)
-    snapshot_dir = os.path.join(trainlog_path,snapshot_dir)
-    snapshot_model = os.path.join(snapshot_dir + 'gradient_cnn_{.updater.epoch}')
-    snapshot_optimizer = os.path.join(snapshot_dir + 'gradient_optimizer_{.updater.epoch}')
+
+    snapshot_model = 'gradient_cnn_{.updater.epoch}'
+    snapshot_optimizer = 'gradient_optimizer_{.updater.epoch}'
 
     if (not modelload) and os.path.isfile(model_path):
         print("New model training is chosen but a model already exists at the specified location.")
@@ -55,9 +69,17 @@ def cnn_train():
         return
 
     if not os.path.isdir(trainlog_path): os.makedirs(trainlog_path)
-    if not os.path.isdir(snapshot_dir): os.makedirs(snapshot_dir)
 
-    logfile = open(logfile_path, "a")
+    logger = logging.getLogger(__name__)
+    s_handler = logging.StreamHandler()
+    s_handler.setLevel(logging.DEBUG)
+    f_handler = logging.FileHandler(logfile_path)
+    f_handler.setLevel(logging.DEBUG)
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(s_handler)
+    logger.addHandler(f_handler)
+
+    # logfile = open(logfile_path, "a")
     date = datetime.now()
     startdate = date.strftime('%Y/%m/%d %H:%M:%S')
     f_startdate = date.strftime('%Y%m%d_%H%M%S')
@@ -76,21 +98,29 @@ def cnn_train():
 
     datasize = int(data.size/48/48/3)
 
-    print("execution:" + startdate)
-    print("training data dir:%s" % data_dir)
-    print("cnn model dir:%s" % model_dir)
-    print("batchsize:%d" % batchsize)
-    print("epoch:%d" % epoch)
-    print("loaded data size(number of images):%d" %datasize)
-    print("N(split number):%d" % N)
+    logger.debug("execution:" + startdate)
+    logger.debug("training data dir:%s", data_dir)
+    logger.debug("cnn model dir:%s", model_dir)
+    logger.debug("batchsize:%d", batchsize)
+    logger.debug("epoch:%d", epoch)
+    logger.debug("loaded data size(number of images):%d",datasize)
+    logger.debug("N(split number):%d", N)
 
-    print("execution:" + startdate, file=logfile)
-    print("training data dir:%s" % data_dir, file=logfile)
-    print("cnn model dir:%s" % model_dir, file=logfile)
-    print("batchsize:%d" % batchsize, file=logfile)
-    print("epoch:%d" % epoch, file=logfile)
-    print("loaded data size(number of images):%d" %datasize, file=logfile)
-    print("N(split number):%d" % N, file=logfile)
+    # print("execution:" + startdate)
+    # print("training data dir:%s" % data_dir)
+    # print("cnn model dir:%s" % model_dir)
+    # print("batchsize:%d" % batchsize)
+    # print("epoch:%d" % epoch)
+    # print("loaded data size(number of images):%d" %datasize)
+    # print("N(split number):%d" % N)
+    #
+    # print("execution:" + startdate, file=logfile)
+    # print("training data dir:%s" % data_dir, file=logfile)
+    # print("cnn model dir:%s" % model_dir, file=logfile)
+    # print("batchsize:%d" % batchsize, file=logfile)
+    # print("epoch:%d" % epoch, file=logfile)
+    # print("loaded data size(number of images):%d" %datasize, file=logfile)
+    # print("N(split number):%d" % N, file=logfile)
 
     data_train ,data_test = np.split(data,[N])
     val_train , val_test = np.split(val,[N])
@@ -105,7 +135,7 @@ def cnn_train():
     trainer = training.Trainer(updater,(epoch,"epoch"),out = trainlog_path)
 
     trainer.extend(extensions.Evaluator(test_iter,model,device=0))
-    trainer.extend(extensions.LogReport(log_name="trainlog" + f_startdate))
+    trainer.extend(extensions.LogReport(log_name="tlog" + f_startdate + ".trainlog"))
     trainer.extend(extensions.PrintReport(["epoch","main/accuracy","validation/main/accuracy"]))
     trainer.extend(extensions.ProgressBar())
 
@@ -120,6 +150,11 @@ def cnn_train():
     model.to_cpu()
     serializers.save_npz(model_path, model)
     serializers.save_npz(optimizer_path, optimizer)
+    root, exe = os.path.splitext(model_path)
+    modelname_file = root + "_modelname.txt"
+    f = open(modelname_file,"w")
+    f.write(cnn_classname)
+    f.close()
 
     np.save(os.path.join(model_dir, meanimg_name), mean_image) #平均画像の保存
     root, ext = os.path.splitext(meanimg_name)
@@ -130,10 +165,11 @@ def cnn_train():
     genGraph(trainlog_path)
 
     exec_time = time.time() - exec_time
-    print("exex time:%f sec"% exec_time)
-    print("exex time:%f" % exec_time,file=logfile)
-
-    logfile.close()
+    logger.debug("exex time:%f sec", exec_time)
+    # print("exex time:%f sec"% exec_time)
+    # print("exex time:%f" % exec_time,file=logfile)
+    #
+    # logfile.close()
 
 if __name__ == "__main__":
     cnn_train()
