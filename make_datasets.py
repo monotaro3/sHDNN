@@ -9,7 +9,7 @@ import math
 def make_bboximg(region,img,dataset_img_size):
     ymin,xmin,ymax,xmax = region #opecvの座標系に変換
     bboximg = img[xmin:xmax+1,ymin:ymax+1,:]
-    bboximg = (cv.resize(bboximg,dataset_img_size)).transpose(2, 0, 1)  #無理やりリサイズ
+    bboximg = (cv.resize(bboximg,dataset_img_size)).transpose(2, 0, 1)  / 255.#無理やりリサイズ
     return bboximg
 
 def make_rotated_bboximg(bbox,img,bboxes_img,angles,dataset_img_size):
@@ -33,7 +33,7 @@ def make_rotated_bboximg(bbox,img,bboxes_img,angles,dataset_img_size):
         rmat = cv.getRotationMatrix2D(center,angle,1.0)
         l_img_r = cv.warpAffine(l_img,rmat,d_size)
         img_r = l_img_r[diff_height:-diff_height,diff_width:-diff_width,:]
-        img_r = (cv.resize(img_r, dataset_img_size)).transpose(2, 0, 1)
+        img_r = (cv.resize(img_r, dataset_img_size)).transpose(2, 0, 1) /255.
         bboxes_img.append(img_r)
 
 def make_bboxeslist(gt_file):
@@ -50,7 +50,7 @@ def make_bboxeslist(gt_file):
         line = gt_txt.readline()
     return bboxes
 
-def make_bgimg(img,size,number,bboxes,dataset_img_size):
+def make_bgimg(img,size,number,bboxes,dataset_img_size,angles):
     x,y,z = img.shape
     x_max = x-size
     y_max = y-size
@@ -62,11 +62,12 @@ def make_bgimg(img,size,number,bboxes,dataset_img_size):
         pos_y = randint(0,y_max)
         if_bg = True
         for j in bboxes:
-            if calcIoU(j,[pos_y,pos_y+size-1,pos_x,pos_x+size-1]) >0.4: #座標系をVOC用に変換
+            if calcIoU(j,[pos_y,pos_x,pos_y+size-1,pos_x+size-1]) >0.4: #座標系をVOC用に変換
                 if_bg = False
                 break
         if if_bg:
-            bg_imgs.append((cv.resize(img[pos_x:pos_x+size,pos_y:pos_y+size,:],dataset_img_size)).transpose(2, 0, 1))
+            bg_imgs.append((cv.resize(img[pos_x:pos_x+size,pos_y:pos_y+size,:],dataset_img_size)).transpose(2, 0, 1)/255.)
+            if len(angles) != 0:make_rotated_bboximg([pos_y,pos_x,pos_y+size-1,pos_x+size-1],img,bg_imgs,angles,dataset_img_size)
             i += 1
     return bg_imgs
 
@@ -95,9 +96,9 @@ def make_car_bg_images(imgfile,bg_size,bg_number,angles,dataset_img_size): #画�
 
     for bbox in bboxes:
         bboxes_img.append(make_bboximg(bbox,img,dataset_img_size))
-        if angles != "": make_rotated_bboximg(bbox,img,bboxes_img,angles,dataset_img_size)
+        if len(angles[0]) != 0: make_rotated_bboximg(bbox,img,bboxes_img,angles[0],dataset_img_size)
     print("  vehicle images finished.(%d imgs)"% len(bboxes_img))
-    bg_imgs = make_bgimg(img,bg_size,bg_number,bboxes,dataset_img_size)
+    bg_imgs = make_bgimg(img,bg_size,bg_number,bboxes,dataset_img_size,angles[1])
     print("  bg images finished.(%d imgs)"% len(bg_imgs))
     return bboxes_img,bg_imgs
 
@@ -193,21 +194,23 @@ def make_datasets(img_dir,bg_ratio,angles,dataset_img_size,useBINGProposals,BING
     return vehicle_images,bg_images
 
 def main():
-    img_dir = "C:/work/vehicle_detection/images/train/test" #"C:/work/gspace_yangon/vehicle/train"
+    img_dir = "C:/work/vehicle_detection/images/train/" #"C:/work/gspace_yangon/vehicle/train"
     bg_bias = 35
-    data_dir = "data/yangon_vd_161114/test"
+    data_dir = "data/vd_bg35_rot_noBING_bgrot"
     data_name = "data.npy"
     val_name = "val.npy"
     meanimg_name = "mean_image.npy"
     logfile_name = "traindata.log"
 
-    angles = "" #[9.0, 18.0, 27.0, 36.0, 45.0, 54.0, 63.0, 72.0, 81.0, 90.0]  # set "" if rotation is not necessary
+    angles = [[9.0, 18.0, 27.0, 36.0, 45.0, 54.0, 63.0, 72.0, 81.0, 90.0], \
+              [9.0, 18.0, 27.0, 36.0, 45.0, 54.0, 63.0, 72.0, 81.0, 90.0]\
+              ]  # set "" if rotation is not necessary. angle[0]:groundtruth, angle[1]:background
 
-    useBINGProposals = True
+    useBINGProposals = False
     BING_pIoU = 0.6
     B_number = 100000 ; # limit number of BING region proposals which are used
 
-    dataset_img_size = (48,48)
+    dataset_img_size = (48,48) #This is determined by CNN structure
 
     data_path = os.path.join(data_dir, data_name)
     val_path = os.path.join(data_dir,val_name)
