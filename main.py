@@ -16,7 +16,7 @@ from datetime import datetime
 import logging
 #from original source
 from make_datasets import make_bboxeslist
-from cnn_structure import vehicle_classify_CNN
+from cnn_train import vehicle_classify_CNN
 
 class slidingwindow():
     def __init__(self,img,x,y,windowsize,slidestep = 0.5,efactor = 1.414,locatedistance=0.45):
@@ -362,8 +362,8 @@ def main():
     showImage = False  # 処理後画像表示　ディレクトリ内処理の場合はオフ
     imgpath = "C:/work/vehicle_detection/images/test/kurume_yumetown.tif"  # 単一ファイル処理
     test_dir = "../vehicle_detection/images/test/"
-    result_dir = "../vehicle_detection/images/test/sHDNN" #""../vehicle_detection/images/result/"
-    cnn_dir = "model/vd_bg35_norot_noBING/200epoch"
+    result_dir = "../vehicle_detection/images/test/sHDNN/reverse" #""../vehicle_detection/images/result/"
+    cnn_dir = "model/vd_bg35_rot_noBING_Adam/"
     cnn_classifier = "gradient_cnn.npz"
     cnn_optimizer = "gradient_optimizer.npz"
     mean_image_dir = ""
@@ -374,7 +374,7 @@ def main():
     batchsize = 50
     efactor = 1.414
     locatedistance = 0.45
-    overlap_sort_reverse = False
+    overlap_sort_reverse = True
     meshsize = 50
 
     geoRef = True
@@ -444,6 +444,8 @@ def main():
     logger.debug("Enlarge Factor:%f", efactor)
     logger.debug("Positive Window Distance:%f", locatedistance)
     logger.debug("Overlap Sort Reverse:%s", str(overlap_sort_reverse))
+
+    overAcc = 0
 
     for imgpath in img_files:
 
@@ -575,8 +577,11 @@ def main():
                 i.draw(result_img1, {"TP":True, "FP":True, "FN":True})
                 i.draw(result_img2, {"TP": True, "FP": True, "FN": False})
 
+            FAR = FP / len(vehicle_detected)
             PR = vehicle_detected.count(True)/detectobjects if detectobjects != 0 else None
             RR = vehicle_detected.count(True)/len(vehicle_detected) if len(vehicle_detected) != 0 else None
+            Accuracy = (TP + TN) / (TP + TN + FP + FN)
+            overAcc += Accuracy
 
         exec_time = time.time() - exec_time
 
@@ -586,9 +591,11 @@ def main():
 
         if not TestOnly:
             logger.debug("GroundTruth vehicles    :%d", len(vehicle_detected))
+            logger.debug("FAR(False alarm rate)   :%.3f", FAR)
             logger.debug("PR(d vehicles/d objects):%d/%d %s", vehicle_detected.count(True),detectobjects,str(PR))
             logger.debug("RR(detected vehicles)   :%d/%d %s", vehicle_detected.count(True),len(vehicle_detected),str(RR))
             logger.debug("TP,TN,FP,FN             :%d,%d,%d,%d", TP, TN, FP, FN)
+            logger.debug("Accuracy:%.3f", Accuracy)
 
 
         if geoRef:
@@ -645,9 +652,13 @@ def main():
             cv.waitKey(0)
             cv.destroyAllWindows()
 
+        logger.debug("")
+
     if procDIR:
         all_exec_time = time.time() - all_exec_time
+        overAcc = overAcc / len(img_files)
         logger.debug("all exec time:%.3f seconds" % all_exec_time)
+        logger.debug("Overall Accuracy:%.3f", overAcc)
 
 if __name__ == "__main__":
     main()
