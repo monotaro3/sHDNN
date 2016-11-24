@@ -7,11 +7,19 @@ import os
 import logging
 
 def genGraph(log_dir):
-    print(__name__)
-    logger = logging.getLogger("__main__")
+    logger = logging.getLogger("__main__." + __name__)
 
     tmp = os.listdir(log_dir)
-    logfiles = sorted([os.path.join(log_dir, x) for x in tmp if os.path.isfile(os.path.join(log_dir, x))])
+    tmp = sorted([os.path.join(log_dir, x) for x in tmp if os.path.isfile(os.path.join(log_dir, x))])
+    logfiles = []
+    for t in tmp:
+        root, exe = os.path.splitext(t)
+        if exe == ".trainlog":
+            logfiles.append(t)
+
+    if len(logfiles) == 0:
+        logger.error("No log files.")
+        return
 
     train_acc = []
     valid_acc = []
@@ -71,15 +79,15 @@ def genGraph(log_dir):
     logger.debug("Graph was generated succesfully.")
 
 if __name__ == "__main__":
-    log_dir = "C:/work/sHDNN/model/vd_bg35_norot_noBING/trainlog"
+    log_dir = "C:/work/sHDNN/model/vd_bg35_rot_noBING_Adam/trainlog"
 
     logger = logging.getLogger(__name__)
     s_handler = logging.StreamHandler()
     s_handler.setLevel(logging.DEBUG)
-    f_handler = logging.FileHandler(os.path.join(log_dir,"graph.log"))
+    #f_handler = logging.FileHandler(os.path.join(log_dir,"graph.log"))
     logger.setLevel(logging.DEBUG)
     logger.addHandler(s_handler)
-    logger.addHandler(f_handler)
+    #logger.addHandler(f_handler)
 
     genGraph(log_dir)
 
