@@ -193,17 +193,17 @@ def make_datasets(img_dir,bg_ratio,angles,dataset_img_size,useBINGProposals,BING
     return vehicle_images,bg_images
 
 def main():
-    img_dir = "C:/work/vehicle_detection/images/train/test" #"C:/work/gspace_yangon/vehicle/train"
+    img_dir = "C:/work/vehicle_detection/images/train/" #"C:/work/gspace_yangon/vehicle/train"
     bg_bias = 35
-    data_dir = "data/yangon_vd_161114/test"
+    data_dir = "data/vd_bg35_rot_noBING"
     data_name = "data.npy"
     val_name = "val.npy"
     meanimg_name = "mean_image.npy"
     logfile_name = "traindata.log"
 
-    angles = "" #[9.0, 18.0, 27.0, 36.0, 45.0, 54.0, 63.0, 72.0, 81.0, 90.0]  # set "" if rotation is not necessary
+    angles = [9.0, 18.0, 27.0, 36.0, 45.0, 54.0, 63.0, 72.0, 81.0, 90.0]  # set "" if rotation is not necessary
 
-    useBINGProposals = True
+    useBINGProposals = False
     BING_pIoU = 0.6
     B_number = 100000 ; # limit number of BING region proposals which are used
 
