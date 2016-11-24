@@ -16,7 +16,7 @@ from datetime import datetime
 import logging
 #from original source
 from make_datasets import make_bboxeslist
-from cnn_train import vehicle_classify_CNN
+from cnn_structure import vehicle_classify_CNN
 
 class slidingwindow():
     def __init__(self,img,x,y,windowsize,slidestep = 0.5,efactor = 1.414,locatedistance=0.45):
