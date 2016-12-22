@@ -16,7 +16,7 @@ import cnn_structure
 import logging
 
 def cnn_train():
-    modelload = True # 既存のモデルを読み込んでトレーニング
+    modelload = False # 既存のモデルを読み込んでトレーニング
 
     model_dir = "model/vd_bg35_rot_noBING_Adam_dropout1"
     model_name = "gradient_cnn.npz"
@@ -35,7 +35,7 @@ def cnn_train():
     meanimg_name = "mean_image.npy"
 
     batchsize = 100
-    epoch = 1
+    epoch = 1000
     N = 140000 #split data into training and validation
 
     if modelload:
@@ -134,7 +134,10 @@ def cnn_train():
     updater = training.StandardUpdater(train_iter,optimizer,device=0)
     trainer = training.Trainer(updater,(epoch,"epoch"),out = trainlog_path)
 
-    trainer.extend(extensions.Evaluator(test_iter,model,device=0))
+    eval_model = model.copy()
+    eval_model.train = False
+
+    trainer.extend(extensions.Evaluator(test_iter,eval_model,device=0))
     trainer.extend(extensions.LogReport(log_name="tlog" + f_startdate + ".trainlog"))
     trainer.extend(extensions.PrintReport(["epoch","main/accuracy","validation/main/accuracy"]))
     trainer.extend(extensions.ProgressBar())
