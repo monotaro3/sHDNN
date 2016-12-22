@@ -14,6 +14,7 @@ from chainer.training import extensions
 from chainer.datasets import tuple_dataset
 from datetime import datetime
 import logging
+import csv
 #from original source
 from make_datasets import make_bboxeslist
 from cnn_structure import vehicle_classify_CNN
@@ -26,7 +27,8 @@ class slidingwindow():
         self.slidestep = int(self.windowsize * slidestep)
         self.efactor = efactor
         self.repeat = False
-        self.vehiclecover = False
+        self.bVcover = False
+        self.bVdetect = False
         self.locatedistance = locatedistance
         self.result = None
         self.mesh_idx_x = None
@@ -39,6 +41,10 @@ class slidingwindow():
         self.y -= int((self.windowsize * efactor - self.windowsize)/2)
         self.windowsize = int(round(self.windowsize * efactor))
         self.movetocentroid(img)
+        self.checkedwindows = []
+        self.connections = []
+        self.connections2 = []
+        self.cVehicle = None
 
     def movetocentroid(self,img):
         img_height,img_width = img.shape
@@ -59,14 +65,14 @@ class slidingwindow():
                              (150, 150, 150))
         else:
             if flags["FN"]:
-                if self.result == 0 and self.vehiclecover == True: #False Negative with green
+                if self.result == 0 and self.bVcover == True: #False Negative with green
                     cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
                                  (0, 255, 0))
             if flags["TP"]:
-                if self.result == 1 and self.vehiclecover == True: #True Positive with red
+                if self.result == 1 and self.bVcover == True: #True Positive with red
                     cv.rectangle(img, (self.x, self.y), (self.x+self.windowsize-1, self.y+self.windowsize-1), (0, 0, 255))
             if flags["FP"]:
-                if self.result == 1 and self.vehiclecover == False: #False Positive with blue
+                if self.result == 1 and self.bVcover == False: #False Positive with blue
                     cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
                                  (255, 0, 0))
 
@@ -89,15 +95,33 @@ class slidingwindow():
     def cover(self,bbox):
         bboxcenter = bbox[0] + int((bbox[2]-bbox[0])/2),bbox[1] + int((bbox[3]-bbox[1])/2)
         windowcenter = self.x + int(self.windowsize/2),self.y + int(self.windowsize/2)
-        if math.sqrt((bboxcenter[0]-windowcenter[0])**2 + (bboxcenter[1]-windowcenter[1])**2) < self.windowsize*self.locatedistance:
-            self.vehiclecover = True
-            return True
+        distance = math.sqrt((bboxcenter[0]-windowcenter[0])**2 + (bboxcenter[1]-windowcenter[1])**2)
+        if distance < self.windowsize*self.locatedistance:
+            #self.bVcover = True
+            return distance
         else:
-            return False
+            return -1
 
     def getCenter(self):
         self.center = self.x + int(math.ceil(self.windowsize / 2)), self.y + int(math.ceil(self.windowsize / 2))
         return self.center
+
+class vehicle():
+    def __init__(self,bbox):
+        self.bbox = bbox
+        self.c_x = int(math.floor(self.bbox[0] - 1 + (self.bbox[2] - self.bbox[0] + 1)/2))
+        self.c_y = int(math.floor(self.bbox[1] - 1 + (self.bbox[3] - self.bbox[1] + 1)/2))
+        self.connections = []
+        self.connections2 = []
+        self.covered = False
+        self.detected = False
+
+class connection():
+    def __init__(self,obj1,obj2,distance):
+        self.obj1 = obj1
+        self.obj2 = obj2
+        self.distance = distance
+        self.valid = True
 
 def _calcgrad(img):
     grad_x = cv.Sobel(img, cv.CV_64F, 1, 0, 1)
@@ -184,7 +208,7 @@ def getslidewindows(img,windowsize,meshsize, slide_param,overlap_sort_reverse, s
     windows2 = None
     windows3 = None
 
-    multiprocess = 1 #マルチプロセス 1:有効化　ただしデバッグ使用不可
+    multiprocess = 0 #マルチプロセス 1:有効化　ただしデバッグ使用不可
     if multiprocess == 1:
         with futures.ProcessPoolExecutor() as executor:     #マルチプロセス処理
             mappings = {executor.submit(makeslidingwindows,n,windowsize,slide_param): n for n in values}
@@ -204,13 +228,14 @@ def getslidewindows(img,windowsize,meshsize, slide_param,overlap_sort_reverse, s
     print("discarding repetitive images...")
     img_height, img_width, channel = img.shape
 
-    windowsize = int(round(windowsize*slide_param["efactor"]))
-    h_windowsize = int(math.ceil(windowsize/2))
+    windowsize = int(round(windowsize * slide_param["efactor"]))
+    h_windowsize = int(math.ceil(windowsize / 2))
     r_windows = windows1 + windows2 + windows3
-    m_width = int(math.ceil(img_width/h_windowsize))
-    m_height = int(math.ceil(img_height/h_windowsize))
+    m_width = int(math.ceil(img_width / h_windowsize))
+    m_height = int(math.ceil(img_height / h_windowsize))
     r_meshsize = m_width * m_height
     r_mesh = []
+    connections = []
     for i in range(r_meshsize):
         r_mesh.append([])
     for i in r_windows:
@@ -236,31 +261,127 @@ def getslidewindows(img,windowsize,meshsize, slide_param,overlap_sort_reverse, s
         for k in idx_width:
             for l in idx_height:
                 if not (k == i.mesh_idx_x and l == i.mesh_idx_y):
-                    search_idx.append([k,l])
+                    search_idx.append([k, l])
         for j in r_mesh[m_width * i.mesh_idx_y + i.mesh_idx_x]:
             if i is not j:
-                if math.sqrt((i.x - j.x) ** 2 + (i.y - j.y) ** 2) < windowsize * mindistance:
-                    i.overlap += 1
-                    j.overlap += 1
-                    i.overlap_windows.append(j)
-                    j.overlap_windows.append(i)
+                if not i in j.checkedwindows:
+                    i.checkedwindows.append(j)
+                    j.checkedwindows.append(i)
+                    distance = math.sqrt((i.x - j.x) ** 2 + (i.y - j.y) ** 2)
+                    if distance < windowsize * mindistance:
+                        c = connection(i,j,distance)
+                        connections.append(c)
+                        i.connections.append(c)
+                        j.connections.append(c)
+                        i.overlap += 1
+                        j.overlap += 1
+                        # i.overlap_windows.append(j)
+                        # j.overlap_windows.append(i)
         for k in search_idx:
             for j in r_mesh[m_width * k[1] + k[0]]:
-                if math.sqrt((i.x - j.x) ** 2 + (i.y - j.y) ** 2) < windowsize * mindistance:
-                    i.overlap += 1
-                    j.overlap += 1
-                    i.overlap_windows.append(j)
-                    j.overlap_windows.append(i)
-    r_windows.sort(key=lambda x: x.overlap,reverse=overlap_sort_reverse)
+                if not i in j.checkedwindows:
+                    i.checkedwindows.append(j)
+                    j.checkedwindows.append(i)
+                    distance = math.sqrt((i.x - j.x) ** 2 + (i.y - j.y) ** 2)
+                    if distance < windowsize * mindistance:
+                        c = connection(i, j, distance)
+                        connections.append(c)
+                        i.connections.append(c)
+                        j.connections.append(c)
+                        i.overlap += 1
+                        j.overlap += 1
+                        # i.overlap_windows.append(j)
+                        # j.overlap_windows.append(i)
+    connections.sort(key=lambda x: x.distance)
     for i in r_windows:
-        if i.repeat == False:
-            for j in i.overlap_windows:
-                j.repeat = True
+        i.connections.sort(key=lambda x: x.distance)
+    for c in connections:
+        if c.valid == True:
+            c.valid = False
+            window1 = c.obj1
+            window2 = c.obj2
+            window1.connections = [x for x in window1.connections if x.valid == True]
+            window2.connections = [x for x in window2.connections if x.valid == True]
+            cnumber_min = len(window1.connections) if len(window1.connections) <= len(window2.connections) else len(window2.connections)
+            loser = None
+            for i in range(cnumber_min):
+                if window1.connections[i].distance < window2.connections[i].distance:
+                    loser = window2
+                    break
+                elif window1.connections[i].distance > window2.connections[i].distance:
+                    loser = window1
+                    break
+            if loser == None:
+                if window1.overlap > window2.overlap: loser = window2
+                elif window1.overlap < window2.overlap: loser = window1
+                else: loser = window2
+            loser.repeat = True
+            for i in loser.connections:
+                i.valid = False
     slidewindows = []
     for i in r_windows:
         if i.repeat == False:
             slidewindows.append(i)
 
+    # #legacy 2nd
+    # windowsize = int(round(windowsize*slide_param["efactor"]))
+    # h_windowsize = int(math.ceil(windowsize/2))
+    # r_windows = windows1 + windows2 + windows3
+    # m_width = int(math.ceil(img_width/h_windowsize))
+    # m_height = int(math.ceil(img_height/h_windowsize))
+    # r_meshsize = m_width * m_height
+    # r_mesh = []
+    # for i in range(r_meshsize):
+    #     r_mesh.append([])
+    # for i in r_windows:
+    #     center_x = i.x + h_windowsize - 1
+    #     center_y = i.y + h_windowsize - 1
+    #     if center_x < 0: center_x = 0
+    #     if center_y < 0: center_y = 0
+    #     if center_x >= img_width: center_x = img_width - 1
+    #     if center_y >= img_height: center_y = img_height - 1
+    #     idx_x = int(math.floor(center_x / h_windowsize))
+    #     idx_y = int(math.floor(center_y / h_windowsize))
+    #     i.mesh_idx_x = idx_x
+    #     i.mesh_idx_y = idx_y
+    #     r_mesh[m_width * idx_y + idx_x].append(i)
+    # for i in r_windows:
+    #     idx_width = [i.mesh_idx_x]
+    #     idx_height = [i.mesh_idx_y]
+    #     if i.mesh_idx_x != 0: idx_width.append(i.mesh_idx_x - 1)
+    #     if i.mesh_idx_x != m_width - 1: idx_width.append(i.mesh_idx_x + 1)
+    #     if i.mesh_idx_y != 0: idx_height.append(i.mesh_idx_y - 1)
+    #     if i.mesh_idx_y != m_height - 1: idx_height.append(i.mesh_idx_y + 1)
+    #     search_idx = []
+    #     for k in idx_width:
+    #         for l in idx_height:
+    #             if not (k == i.mesh_idx_x and l == i.mesh_idx_y):
+    #                 search_idx.append([k,l])
+    #     for j in r_mesh[m_width * i.mesh_idx_y + i.mesh_idx_x]:
+    #         if i is not j:
+    #             if math.sqrt((i.x - j.x) ** 2 + (i.y - j.y) ** 2) < windowsize * mindistance:
+    #                 i.overlap += 1
+    #                 j.overlap += 1
+    #                 i.overlap_windows.append(j)
+    #                 j.overlap_windows.append(i)
+    #     for k in search_idx:
+    #         for j in r_mesh[m_width * k[1] + k[0]]:
+    #             if math.sqrt((i.x - j.x) ** 2 + (i.y - j.y) ** 2) < windowsize * mindistance:
+    #                 i.overlap += 1
+    #                 j.overlap += 1
+    #                 i.overlap_windows.append(j)
+    #                 j.overlap_windows.append(i)
+    # r_windows.sort(key=lambda x: x.overlap,reverse=overlap_sort_reverse)
+    # for i in r_windows:
+    #     if i.repeat == False:
+    #         for j in i.overlap_windows:
+    #             j.repeat = True
+    # slidewindows = []
+    # for i in r_windows:
+    #     if i.repeat == False:
+    #         slidewindows.append(i)
+
+    ##legacy 1st
     # step = int(windowsize * slide)
     # width = math.ceil(img_width/step)
     # height = math.ceil(img_height/step)
@@ -343,6 +464,7 @@ def predictor(data,cnn_path,batch,gpu = 0):
     serializers.load_npz(cnn_classifier, model)
     optimizer.setup(model)
     serializers.load_npz(cnn_optimizer, optimizer)
+    model.predictor.train=False
 
     if gpu == 1:
         model.to_gpu()
@@ -375,8 +497,8 @@ def main():
     showImage = False  # 処理後画像表示　ディレクトリ内処理の場合はオフ
     imgpath = "C:/work/vehicle_detection/images/test/kurume_yumetown.tif"  # 単一ファイル処理
     test_dir = "../vehicle_detection/images/test/"
-    result_dir = "../vehicle_detection/images/test/sHDNN/reverse" #""../vehicle_detection/images/result/"
-    cnn_dir = "model/vd_bg35_rot_noBING_Adam/"
+    result_dir = "../vehicle_detection/images/test/sHDNN/rot" #""../vehicle_detection/images/result/"
+    cnn_dir = "model/vd_bg35_rot_noBING_Adam_dropout2/400epoch"
     cnn_classifier = "gradient_cnn.npz"
     cnn_optimizer = "gradient_optimizer.npz"
     mean_image_dir = ""
@@ -456,8 +578,18 @@ def main():
     logger.debug("Batchsize:%d", batchsize)
     logger.debug("Enlarge Factor:%f", efactor)
     logger.debug("Positive Window Distance:%f", locatedistance)
-    logger.debug("Overlap Sort Reverse:%s", str(overlap_sort_reverse))
+    #logger.debug("Overlap Sort Reverse:%s", str(overlap_sort_reverse))
 
+    results_stat = []
+    root, exe = os.path.splitext(os.path.join(cnn_dir,cnn_classifier))
+    modelname_file = root + "_modelname.txt"
+    try:
+        f = open(modelname_file, "r")
+        cnn_classname = f.readline()
+    except:
+        cnn_classname = "vehicle_classify_CNN"
+    results_stat.append([cnn_classname,cnn_dir])
+    results_stat.append(["","GroundTruth","DR","FAR","PR","RR","TP","FP","FN","TN","Accuracy"])
     overAcc = 0
 
     for imgpath in img_files:
@@ -534,11 +666,14 @@ def main():
             result_testonly = np.array(img)
             for i in slidewindows:
                 i.draw(result_testonly,"TESTONLY")
-        else:  # Validating Detection result
+        else:  # Detection Result Validation
             logger.debug("analyzing results...")
             start = time.time()
             vehicle_list = make_bboxeslist(gt_file)
             vehicle_detected = [False]*len(vehicle_list)
+            vehicle_connection = []
+            for i in vehicle_list:
+                vehicle_connection.append([])
 
             y, x, channel = img.shape
             mesh_width = int(math.ceil(x / meshsize))
@@ -554,11 +689,23 @@ def main():
                     else:
                         i[3] = i[1] + v_windowsize
 
-            for i in range(len(vehicle_list)):
-                gt_x = int(math.floor(vehicle_list[i][0] - 1 + (vehicle_list[i][2] - vehicle_list[i][0] + 1)/2))
-                gt_y = int(math.floor(vehicle_list[i][1] - 1 + (vehicle_list[i][3] - vehicle_list[i][1] + 1)/2))
-                idx_width = [int(math.ceil(gt_x / meshsize))]
-                idx_height = [int(math.ceil(gt_y / meshsize))]
+            #one window can detect only one vehicle
+            #if a vehicle is detected by multiple windows, the closest window wins
+            #windows which lost can detect other vehicles
+            gt_vehicles = []
+            for i in vehicle_list:
+                gt_vehicles.append(vehicle(i))
+            connections1 = []
+            connections2 = []
+
+            for i in slidewindows:
+                i.connections = []
+
+            for i in gt_vehicles:
+                # gt_x = int(math.floor(vehicle_list[i][0] - 1 + (vehicle_list[i][2] - vehicle_list[i][0] + 1)/2))
+                # gt_y = int(math.floor(vehicle_list[i][1] - 1 + (vehicle_list[i][3] - vehicle_list[i][1] + 1)/2))
+                idx_width = [int(math.ceil(i.c_x / meshsize))]
+                idx_height = [int(math.ceil(i.c_y / meshsize))]
                 if idx_width[0] != 1:idx_width.append(idx_width[0]-1)
                 if idx_width[0] != mesh_width:idx_width.append(idx_width[0]+1)
                 if idx_height[0] != 1:idx_height.append(idx_height[0]-1)
@@ -566,9 +713,86 @@ def main():
                 for k in idx_width:
                     for l in idx_height:
                         for j in slidewindows_mesh[(l-1) * mesh_width + k - 1]:
-                            if j.cover(vehicle_list[i]):
-                                if j.result == 1:
-                                    vehicle_detected[i] = True
+                            distance = j.cover(i.bbox)
+                            if distance >= 0:
+                                j.bVcover = True
+                                c = connection(i,j,distance) #obj: vehicle, window
+                                connections1.append(c)
+                                i.connections.append(c)
+                                j.connections.append(c)
+                                c = connection(i, j, distance) #dupulicate
+                                connections2.append(c)
+                                i.connections2.append(c)
+                                j.connections2.append(c)
+            connections1.sort(key=lambda x: x.distance)
+            connections2.sort(key=lambda x: x.distance)
+            for i in slidewindows:
+                i.connections.sort(key=lambda x: x.distance)
+            # for i in gt_vehicles:
+            #     i.connections1.sort(key=lambda x: x.distance)
+            allow_only_closest = False
+            if allow_only_closest:
+                for i in slidewindows:
+                    if not i.connections == []:
+                        i.connections[0].obj1.covered = True
+                        if i.result == 1:
+                            i.connections[0].obj1.detected = True
+                            i.bVdetect = True
+            else:
+                #coverage
+                for c in connections1:
+                    if c.valid == True:
+                        c.obj1.covered = True
+                        for i in c.obj1.connections:
+                            i.valid = False
+                        for i in c.obj2.connections:
+                            i.valid = False
+                #detection
+                for c in connections2:
+                    if c.valid == True:
+                        if c.obj2.result == 1:
+                            c.obj2.bVdetect = True
+                            if c.obj1.detected == False:
+                                c.obj1.detected = True
+                                for i in c.obj2.connections2:
+                                    i.valid = False
+
+            # #allow 1 window to detect multiple vehicles
+            # for i in gt_vehicles:
+            #     # gt_x = int(math.floor(vehicle_list[i][0] - 1 + (vehicle_list[i][2] - vehicle_list[i][0] + 1)/2))
+            #     # gt_y = int(math.floor(vehicle_list[i][1] - 1 + (vehicle_list[i][3] - vehicle_list[i][1] + 1)/2))
+            #     idx_width = [int(math.ceil(i.c_x / meshsize))]
+            #     idx_height = [int(math.ceil(i.c_y / meshsize))]
+            #     if idx_width[0] != 1: idx_width.append(idx_width[0] - 1)
+            #     if idx_width[0] != mesh_width: idx_width.append(idx_width[0] + 1)
+            #     if idx_height[0] != 1: idx_height.append(idx_height[0] - 1)
+            #     if idx_height[0] != mesh_height: idx_height.append(idx_height[0] + 1)
+            #     for k in idx_width:
+            #         for l in idx_height:
+            #             for j in slidewindows_mesh[(l - 1) * mesh_width + k - 1]:
+            #                 distance = j.cover(i.bbox)
+            #                 if distance >= 0:
+            #                     j.bVcover = True
+            #                     i.covered = True
+            #                     if j.result == 1:
+            #                         i.detected = True
+
+            # #legacy
+            # for i in range(len(vehicle_list)):
+            #     gt_x = int(math.floor(vehicle_list[i][0] - 1 + (vehicle_list[i][2] - vehicle_list[i][0] + 1)/2))
+            #     gt_y = int(math.floor(vehicle_list[i][1] - 1 + (vehicle_list[i][3] - vehicle_list[i][1] + 1)/2))
+            #     idx_width = [int(math.ceil(gt_x / meshsize))]
+            #     idx_height = [int(math.ceil(gt_y / meshsize))]
+            #     if idx_width[0] != 1:idx_width.append(idx_width[0]-1)
+            #     if idx_width[0] != mesh_width:idx_width.append(idx_width[0]+1)
+            #     if idx_height[0] != 1:idx_height.append(idx_height[0]-1)
+            #     if idx_height[0] != mesh_height:idx_height.append(idx_height[0]+1)
+            #     for k in idx_width:
+            #         for l in idx_height:
+            #             for j in slidewindows_mesh[(l-1) * mesh_width + k - 1]:
+            #                 if j.cover(vehicle_list[i]):
+            #                     if j.result == 1:
+            #                         vehicle_detected[i] = True
 
             end = time.time()
             time_analysis = end - start
@@ -581,19 +805,35 @@ def main():
             result_img1 = np.array(img)
             result_img2 = np.array(img)
 
-            for i in slidewindows:
-                if i.result == 1 and i.vehiclecover == True:TP += 1
-                elif i.result == 0 and i.vehiclecover == False:TN += 1
-                elif i.result == 1 and i.vehiclecover == False:FP += 1
-                else:FN += 1
-                if i.result == 1:detectobjects += 1
-                i.draw(result_img1, {"TP":True, "FP":True, "FN":True})
-                i.draw(result_img2, {"TP": True, "FP": True, "FN": False})
+            # for i in slidewindows:
+            #     if i.result == 1 and i.vehiclecover == True:TP += 1
+            #     elif i.result == 0 and i.vehiclecover == False:TN += 1
+            #     elif i.result == 1 and i.vehiclecover == False:FP += 1
+            #     else:FN += 1
+            #     if i.result == 1:detectobjects += 1
+            #     i.draw(result_img1, {"TP":True, "FP":True, "FN":True})
+            #     i.draw(result_img2, {"TP": True, "FP": True, "FN": False})
 
-            FAR = FP / len(vehicle_detected)
-            PR = vehicle_detected.count(True)/detectobjects if detectobjects != 0 else None
-            RR = vehicle_detected.count(True)/len(vehicle_detected) if len(vehicle_detected) != 0 else None
+            for i in slidewindows:
+                if i.result == 1 and i.bVcover == True:
+                    TP += 1
+                elif i.result == 0 and i.bVcover == False:
+                    TN += 1
+                elif i.result == 1 and i.bVcover == False:
+                    FP += 1
+                else:
+                    FN += 1
+                if i.result == 1: detectobjects += 1
+                i.draw(result_img1, {"TP": True, "FP": True, "FN": True})
+                i.draw(result_img2, {"TP": True, "FP": True, "FN": False})
+            nGT = len(gt_vehicles)
+            DR = len([x for x in gt_vehicles if x.covered == True]) / nGT
+            n_detected_vehicles = len([x for x in gt_vehicles if x.detected == True])
+            FAR = FP / nGT
+            PR = n_detected_vehicles/detectobjects if detectobjects != 0 else None
+            RR = n_detected_vehicles/nGT if nGT != 0 else None
             Accuracy = (TP + TN) / (TP + TN + FP + FN)
+            results_stat.append([imgpath,nGT,DR,FAR,PR,RR,TP,FP,FN,TN,Accuracy])
             overAcc += Accuracy
 
         exec_time = time.time() - exec_time
@@ -603,10 +843,11 @@ def main():
         logger.debug("Detected Objects        :%d", detectobjects)
 
         if not TestOnly:
-            logger.debug("GroundTruth vehicles    :%d", len(vehicle_detected))
+            logger.debug("GroundTruth vehicles    :%d", nGT)
+            logger.debug("DR(Detection Rate)      :%.3f", DR)
             logger.debug("FAR(False alarm rate)   :%.3f", FAR)
-            logger.debug("PR(d vehicles/d objects):%d/%d %s", vehicle_detected.count(True),detectobjects,str(PR))
-            logger.debug("RR(detected vehicles)   :%d/%d %s", vehicle_detected.count(True),len(vehicle_detected),str(RR))
+            logger.debug("PR(d vehicles/d objects):%d/%d %s", n_detected_vehicles,detectobjects,str(PR))
+            logger.debug("RR(detected vehicles)   :%d/%d %s", n_detected_vehicles,nGT,str(RR))
             logger.debug("TP,TN,FP,FN             :%d,%d,%d,%d", TP, TN, FP, FN)
             logger.debug("Accuracy:%.3f", Accuracy)
 
@@ -670,6 +911,11 @@ def main():
     if procDIR:
         all_exec_time = time.time() - all_exec_time
         overAcc = overAcc / len(img_files)
+        results_stat.append(["overAcc",overAcc])
+        csvfile = os.path.join(result_dir,"result.csv")
+        with open(csvfile, 'w') as f:
+            writer = csv.writer(f,lineterminator="\n")
+            writer.writerows(results_stat)
         logger.debug("all exec time:%.3f seconds" % all_exec_time)
         logger.debug("Overall Accuracy:%.3f", overAcc)
 
