@@ -46,7 +46,7 @@ class CNN_dropout1(Chain):
         return y
 
 class CNN_dropout2(Chain):
-    def __init__(self):
+    def __init__(self,train=True):
         super(CNN_dropout2, self).__init__(
             conv1=L.Convolution2D(3, 20, 7),
             conv2=L.Convolution2D(20, 8, 4),
@@ -54,6 +54,7 @@ class CNN_dropout2(Chain):
             fc1=L.Linear(72,72),
             fc2=L.Linear(72, 2)
         )
+        self.train = train
 
     def __call__(self, x):
         h1 = F.max_pooling_2d(F.relu(self.conv1(x)), 2, 2)
