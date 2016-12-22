@@ -9,7 +9,7 @@ import math
 def make_bboximg(region,img,dataset_img_size):
     ymin,xmin,ymax,xmax = region #opecvの座標系に変換
     bboximg = img[xmin:xmax+1,ymin:ymax+1,:]
-    bboximg = (cv.resize(bboximg,dataset_img_size)).transpose(2, 0, 1)  / 255.#無理やりリサイズ
+    bboximg = (cv.resize(bboximg,dataset_img_size)).transpose(2, 0, 1) #無理やりリサイズ
     return bboximg
 
 def make_rotated_bboximg(bbox,img,bboxes_img,angles,dataset_img_size):
@@ -33,7 +33,7 @@ def make_rotated_bboximg(bbox,img,bboxes_img,angles,dataset_img_size):
         rmat = cv.getRotationMatrix2D(center,angle,1.0)
         l_img_r = cv.warpAffine(l_img,rmat,d_size)
         img_r = l_img_r[diff_height:-diff_height,diff_width:-diff_width,:]
-        img_r = (cv.resize(img_r, dataset_img_size)).transpose(2, 0, 1) /255.
+        img_r = (cv.resize(img_r, dataset_img_size)).transpose(2, 0, 1)
         bboxes_img.append(img_r)
 
 def make_bboxeslist(gt_file):
@@ -66,7 +66,7 @@ def make_bgimg(img,size,number,bboxes,dataset_img_size,angles):
                 if_bg = False
                 break
         if if_bg:
-            bg_imgs.append((cv.resize(img[pos_x:pos_x+size,pos_y:pos_y+size,:],dataset_img_size)).transpose(2, 0, 1)/255.)
+            bg_imgs.append((cv.resize(img[pos_x:pos_x+size,pos_y:pos_y+size,:],dataset_img_size)).transpose(2, 0, 1))
             if len(angles) != 0:make_rotated_bboximg([pos_y,pos_x,pos_y+size-1,pos_x+size-1],img,bg_imgs,angles,dataset_img_size)
             i += 1
     return bg_imgs
