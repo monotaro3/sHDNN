@@ -29,18 +29,19 @@ class vehicle_classify_CNN(Chain):
         return y
 
 class CNN_dropout1(Chain):
-    def __init__(self):
+    def __init__(self,train=True):
         super(CNN_dropout1, self).__init__(
             conv1=L.Convolution2D(3, 20, 7),
             conv2=L.Convolution2D(20, 8, 4),
             conv3=L.Convolution2D(8, 8, 4),
             fc=L.Linear(72, 2)
         )
+        self.train = train
 
     def __call__(self, x):
-        h1 = F.dropout(F.max_pooling_2d(F.relu(self.conv1(x)), 2, 2),ratio=0.2)
-        h2 = F.dropout(F.max_pooling_2d(F.relu(self.conv2(h1)), 2, 2),ratio=0.2)
-        h3 = F.dropout(F.max_pooling_2d(F.relu(self.conv3(h2)), 2, 2),ratio=0.2)
+        h1 = F.dropout(F.max_pooling_2d(F.relu(self.conv1(x)), 2, 2),ratio=0.2,train=self.train)
+        h2 = F.dropout(F.max_pooling_2d(F.relu(self.conv2(h1)), 2, 2),ratio=0.2,train=self.train)
+        h3 = F.dropout(F.max_pooling_2d(F.relu(self.conv3(h2)), 2, 2),ratio=0.2,train=self.train)
         y = self.fc(h3)
         return y
 
@@ -58,6 +59,6 @@ class CNN_dropout2(Chain):
         h1 = F.max_pooling_2d(F.relu(self.conv1(x)), 2, 2)
         h2 = F.max_pooling_2d(F.relu(self.conv2(h1)), 2, 2)
         h3 = F.max_pooling_2d(F.relu(self.conv3(h2)), 2, 2)
-        h4 = F.dropout(self.fc1(h3),ratio=0.5)
+        h4 = F.dropout(self.fc1(h3),ratio=0.5,train=self.train)
         y = self.fc2(h4)
         return y
