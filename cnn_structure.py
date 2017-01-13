@@ -63,3 +63,41 @@ class CNN_dropout2(Chain):
         h4 = F.dropout(self.fc1(h3),ratio=0.5,train=self.train)
         y = self.fc2(h4)
         return y
+
+class CNN_dropout2_LRN1(Chain):
+    def __init__(self, train=True):
+        super(CNN_dropout2, self).__init__(
+            conv1=L.Convolution2D(3, 20, 7),
+            conv2=L.Convolution2D(20, 8, 4),
+            conv3=L.Convolution2D(8, 8, 4),
+            fc1=L.Linear(72, 72),
+            fc2=L.Linear(72, 2)
+        )
+        self.train = train
+
+    def __call__(self, x):
+        h1 = F.max_pooling_2d(F.local_response_normalization(F.relu(self.conv1(x))), 2, 2)
+        h2 = F.max_pooling_2d(F.relu(self.conv2(h1)), 2, 2)
+        h3 = F.max_pooling_2d(F.relu(self.conv3(h2)), 2, 2)
+        h4 = F.dropout(self.fc1(h3), ratio=0.5, train=self.train)
+        y = self.fc2(h4)
+        return y
+
+class CNN_dropout2_LRN2(Chain):
+    def __init__(self, train=True):
+        super(CNN_dropout2, self).__init__(
+            conv1=L.Convolution2D(3, 20, 7),
+            conv2=L.Convolution2D(20, 8, 4),
+            conv3=L.Convolution2D(8, 8, 4),
+            fc1=L.Linear(72, 72),
+            fc2=L.Linear(72, 2)
+        )
+        self.train = train
+
+    def __call__(self, x):
+        h1 = F.local_response_normalization(F.max_pooling_2d(F.relu(self.conv1(x)), 2, 2))
+        h2 = F.max_pooling_2d(F.relu(self.conv2(h1)), 2, 2)
+        h3 = F.max_pooling_2d(F.relu(self.conv3(h2)), 2, 2)
+        h4 = F.dropout(self.fc1(h3), ratio=0.5, train=self.train)
+        y = self.fc2(h4)
+        return y
