@@ -66,7 +66,7 @@ class CNN_dropout2(Chain):
 
 class CNN_dropout2_LRN1(Chain):
     def __init__(self, train=True):
-        super(CNN_dropout2, self).__init__(
+        super(CNN_dropout2_LRN1, self).__init__(
             conv1=L.Convolution2D(3, 20, 7),
             conv2=L.Convolution2D(20, 8, 4),
             conv3=L.Convolution2D(8, 8, 4),
@@ -85,7 +85,7 @@ class CNN_dropout2_LRN1(Chain):
 
 class CNN_dropout2_LRN2(Chain):
     def __init__(self, train=True):
-        super(CNN_dropout2, self).__init__(
+        super(CNN_dropout2_LRN2, self).__init__(
             conv1=L.Convolution2D(3, 20, 7),
             conv2=L.Convolution2D(20, 8, 4),
             conv3=L.Convolution2D(8, 8, 4),
