@@ -58,19 +58,19 @@ def cnn_trainer(model,optimizer,epoch,batchsize,gpu_device,data,val,traindata_ra
 def cnn_train():
     modelload = False # 既存のモデルを読み込んでトレーニング
 
-    model_dir = "model/test2"
+    model_dir = "model/model/vd_bg35_rot_noBING_bgrot_Adam_dropout2_each"
     model_name = "gradient_cnn.npz"
     optimizer_name = "gradient_optimizer.npz"
     logfile_name = "cnn_train.log"
     traindata_ratio = 0.9
     gpu_Enable = True
-    snapshot_interval_number = 2
+    snapshot_interval_number = 50
     bSnapshot = True
 
     trainlog_dir = "trainlog"
 
     #if modelload == False:
-    cnn_architecture = cnn_structure.CNN_dropout1()
+    cnn_architecture = cnn_structure.CNN_dropout2()
     optimizer = optimizers.Adam()
 
     data_dir = "data/vd_bg35_rot_noBING_bgrot"
@@ -79,7 +79,7 @@ def cnn_train():
     meanimg_name = "mean_image.npy"
 
     batchsize = 100
-    epoch = 10
+    epoch = 200
     #N = 140000 #split data into training and validation
 
     if modelload:
@@ -168,7 +168,7 @@ def cnn_train():
     if(gpu_Enable):model.to_gpu()
 
     #training start
-    train_order_whole = True
+    train_order_whole = False
     if len(data_paths) == 1:
         data_path = data_paths[0]
         val_path = val_paths[0]
@@ -184,7 +184,7 @@ def cnn_train():
             logger.debug("Multiple file Train Order:Whole")
             localepoch=1
             for i in range(epoch):
-                print("%d th epoch(whole process mode)" % (i+1))
+                print("%d / %d epoch(whole process mode)" %(epoch, (i+1)))
                 for j in range(len(data_paths)):
                     data_path = data_paths[j]
                     val_path = val_paths[j]
