@@ -196,15 +196,16 @@ def make_datasets(img_dir,bg_ratio,angles,dataset_img_size,useBINGProposals,BING
 def main():
     img_dir = "C:/work/vehicle_detection/images/train/" #"C:/work/gspace_yangon/vehicle/train"
     bg_bias = 35
-    data_dir = "data/vd_bg35_rot_noBING_bgrot"
-    data_name = "data.npy"
-    val_name = "val.npy"
+    data_dir = "data/vd_bg35_rot_noBING"
+    data_name_prefix = "data"
+    val_name_prefix = "val"
     meanimg_name = "mean_image.npy"
     logfile_name = "traindata.log"
+    MAX_datasize_GB = 5
 
     angles = [[9.0, 18.0, 27.0, 36.0, 45.0, 54.0, 63.0, 72.0, 81.0, 90.0], \
-              [9.0, 18.0, 27.0, 36.0, 45.0, 54.0, 63.0, 72.0, 81.0, 90.0]\
-              ]  # set "" if rotation is not necessary. angle[0]:groundtruth, angle[1]:background
+              []\
+              ]  # set [] for each if rotation is not necessary. angle[0]:groundtruth, angle[1]:background
 
     useBINGProposals = False
     BING_pIoU = 0.6
@@ -212,8 +213,7 @@ def main():
 
     dataset_img_size = (48,48) #This is determined by CNN structure
 
-    data_path = os.path.join(data_dir, data_name)
-    val_path = os.path.join(data_dir,val_name)
+
     meanimg_path = os.path.join(data_dir, meanimg_name)
 
     if not os.path.isdir(data_dir):
@@ -233,8 +233,33 @@ def main():
     for i in indexes:
         data.append(data_[i])
         val.append(val_[i])
-    npdata = np.array(data, np.float32) /255.
-    npval = np.array(val, np.int32)
+
+    #split if data is too big
+    bytes_per_img = dataset_img_size[0] * dataset_img_size[1] * 3 * 4  #assume 3 channels
+    splitsize_bytes = MAX_datasize_GB * 1024**3
+    split_number = 0
+    while((split_number+10000)*bytes_per_img<splitsize_bytes):
+        split_number += 10000
+
+    data_list = []
+    val_list = []
+    split_index = 0
+    while(split_index+split_number<len(data)):
+        data_list.append(data[split_index:split_index+split_number])
+        val_list.append(val[split_index:split_index+split_number])
+        split_index += split_number
+    data_list.append(data[split_index:])
+    val_list.append(val[split_index:])
+
+    for i in range(len(data_list)):
+        npdata = np.array(data_list[i], np.float32) /255.
+        npval = np.array(val_list[i], np.int32)
+
+        data_path = os.path.join(data_dir, data_name_prefix+"_"+str(i)+".npy")
+        val_path = os.path.join(data_dir, val_name_prefix+"_"+str(i)+".npy")
+        np.save(data_path, npdata)
+        np.save(val_path, npval)
+        print(data_name_prefix+"_"+str(i)+".npy" + " and "+val_name_prefix+"_"+str(i)+".npy"+" saved.")
 
     print("training img dir:%s" %img_dir)
     print("rotation:%s" % angles)
@@ -243,9 +268,6 @@ def main():
     print("background data:"+str(len(bg_images)))
     print("bacnground bias:%s" % str(bg_bias))
     print("all data       :"+str(len(data)))
-    np.save(data_path, npdata)
-    np.save(val_path, npval)
-    print("data.npy and val.npy saved.")
 
     logfile = open(os.path.join(data_dir, logfile_name), "a")
     print("training img dir:%s" %img_dir, file=logfile)
@@ -272,42 +294,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-# npdata = npdata - mean_image
-#
-# for i in range(10):
-#     cv.namedWindow("test",cv.WINDOW_AUTOSIZE)
-#     cv.moveWindow("test",1000,500)
-#     print(npval[i])
-#     cv.imshow("test",npdata[i].transpose(1,2,0))
-#     cv.waitKey(0)
-#     cv.destroyAllWindows()
-
-
-
-# imgfile = "c:/work/vehicle_detection/images/mikawaharbor_Z19.tif"
-# bg_size = 25
-# bg_number = 500
-
-# bbox_imgs,bg_imgs = make_car_bg_images(imgfile,bg_size,bg_number)
-
-# print(len(vehicle_images))
-# print(len(bg_images))
-# for i in range(10):
-#     print(vehicle_images[i].shape)
-#     cv.namedWindow("test",cv.WINDOW_AUTOSIZE)
-#     cv.moveWindow("test",1000,500)
-#     cv.imshow("test",vehicle_images[i].transpose(1,2,0))
-#     cv.waitKey(0)
-#     cv.destroyAllWindows()
-
-# print(len(bboxes_img))
-# print(len(bg_imgs))
-# for i in range(10):
-#     print(bg_imgs[i].shape)
-#     cv.imshow("test",bg_imgs[i])
-#     cv.waitKey(0)
-#     cv.destroyAllWindows()
-
-
