@@ -194,7 +194,7 @@ def make_datasets(img_dir,bg_ratio,angles,dataset_img_size,useBINGProposals,BING
     return vehicle_images,bg_images
 
 def main():
-    img_dir = "C:/work/vehicle_detection/images/train/" #"C:/work/gspace_yangon/vehicle/train"
+    img_dir = "../vehicle_detection/images/train/" #"C:/work/gspace_yangon/vehicle/train"
     bg_bias = 35
     data_dir = "data/vd_bg35_rot_noBING"
     data_name_prefix = "data"
