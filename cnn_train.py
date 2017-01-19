@@ -184,7 +184,7 @@ def cnn_train():
             logger.debug("Multiple file Train Order:Whole")
             localepoch=1
             for i in range(epoch):
-                print("%d / %d epoch(whole process mode)" %(epoch, (i+1)))
+                print("%d / %d epoch(whole process mode)" %((i+1),epoch))
                 for j in range(len(data_paths)):
                     data_path = data_paths[j]
                     val_path = val_paths[j]
