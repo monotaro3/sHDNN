@@ -194,17 +194,18 @@ def make_datasets(img_dir,bg_ratio,angles,dataset_img_size,useBINGProposals,BING
     return vehicle_images,bg_images
 
 def main():
-    img_dir = "../vehicle_detection/images/train/" #"C:/work/gspace_yangon/vehicle/train"
+    img_dir = "../vehicle_detection/yangon_satimage/train" #"../vehicle_detection/images/train/"
     bg_bias = 35
-    data_dir = "data/vd_bg35_rot_noBING"
+    data_dir = "data/yangon_test"
     data_name_prefix = "data"
     val_name_prefix = "val"
     meanimg_name = "mean_image.npy"
     logfile_name = "traindata.log"
     MAX_datasize_GB = 5
 
+    # [9.0, 18.0, 27.0, 36.0, 45.0, 54.0, 63.0, 72.0, 81.0, 90.0]
     angles = [[9.0, 18.0, 27.0, 36.0, 45.0, 54.0, 63.0, 72.0, 81.0, 90.0], \
-              []\
+              [9.0, 18.0, 27.0, 36.0, 45.0, 54.0, 63.0, 72.0, 81.0, 90.0]\
               ]  # set [] for each if rotation is not necessary. angle[0]:groundtruth, angle[1]:background
 
     useBINGProposals = False
@@ -233,6 +234,14 @@ def main():
     for i in indexes:
         data.append(data_[i])
         val.append(val_[i])
+
+    #debug
+    # for i in range(50):
+    #     if val[i] == 1:print("car")
+    #     else:print("background")
+    #     cv.imshow("train img", data[i].transpose(1, 2, 0))
+    #     cv.waitKey(0)
+    #     cv.destroyAllWindows()
 
     #split if data is too big
     bytes_per_img = dataset_img_size[0] * dataset_img_size[1] * 3 * 4  #assume 3 channels
