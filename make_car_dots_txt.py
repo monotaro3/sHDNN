@@ -21,12 +21,12 @@ def checkrepeat(dots,dot):
     return repeat
 
 
-img_dir = "C:/work/gspace_yangon/vehicle/test/"
+img_dir = "e:/work/yangon_satimage/train"
 
 
 img_files = []
 tmp = os.listdir(img_dir)
-files = sorted([x for x in tmp if os.path.isfile(img_dir + x)])
+files = sorted([x for x in tmp if os.path.isfile(os.path.join(img_dir, x))])
 if len(files) > 0:
     root, ext = os.path.splitext(files[0])
     img_files.append(os.path.join(img_dir, root))
