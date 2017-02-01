@@ -81,7 +81,7 @@ class slidingwindow():
                     cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
                                  color)
         if show_probability:
-            cv.putText(img,"{0:.4f}".format(self.result_probability),(self.x, self.y),cv.FONT_HERSHEY_PLAIN,0.5,color)
+            cv.putText(img,"{0:.4f}".format(self.result_probability),(self.x, self.y-1 if self.y-2 >=0 else self.y),cv.FONT_HERSHEY_PLAIN,0.6,color)
 
     def draw_(self,img):
         cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
