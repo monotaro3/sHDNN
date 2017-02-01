@@ -895,8 +895,9 @@ def main():
                 vehicle_points_raw = []
                 for i in slidewindows:
                     if i.result == 1:vehicle_points_raw.append(i.getCenter())
-                vehicle_points = getCoords(geoTransform, vehicle_points_raw)
-                savePointshapefile(vehicle_points,"vehicles",SpaRef,shppath)
+                if len(vehicle_points_raw) > 0:
+                    vehicle_points = getCoords(geoTransform, vehicle_points_raw)
+                    savePointshapefile(vehicle_points,"vehicles",SpaRef,shppath)
 
         if not geoRef:
             if TestOnly:
