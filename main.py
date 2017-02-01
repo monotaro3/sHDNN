@@ -62,7 +62,7 @@ class slidingwindow():
     def draw(self,img, flags):
         if flags == "TESTONLY":
             cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
-                             (150, 150, 150))
+                             (132, 33, 225))
         else:
             if flags["FN"]:
                 if self.result == 0 and self.bVcover == True: #False Negative with green
@@ -492,19 +492,19 @@ def predictor(data,cnn_path,batch,gpu = 0):
     return results
 
 def main():
-    TestOnly = False
+    TestOnly = True
     procDIR = True  # ディレクトリ内ファイル一括処理
     showImage = False  # 処理後画像表示　ディレクトリ内処理の場合はオフ
     imgpath = "C:/work/vehicle_detection/images/test/kurume_yumetown.tif"  # 単一ファイル処理
-    test_dir = "../vehicle_detection/images/test/"
-    result_dir = "../vehicle_detection/images/test/sHDNN/rot" #""../vehicle_detection/images/result/"
-    cnn_dir = "model/vd_bg35_rot_noBING_Adam_dropout2/400epoch"
+    test_dir = "e:/work/yangon_satimage/test_2"#"../vehicle_detection/images/test/"
+    result_dir = "e:/work/yangon_satimage/test_2/1color" #"../vehicle_detection/images/test/sHDNN/rot_bgrot" #""../vehicle_detection/images/result/"
+    cnn_dir = "model/yangon_1color_bg35_rot_rot_dropout2_adam_whole"
     cnn_classifier = "gradient_cnn.npz"
     cnn_optimizer = "gradient_optimizer.npz"
     mean_image_dir = ""
     mean_image_file = "mean_image.npy"
     logfile_name = "gradient_cnn.log"
-    windowsize_default = 35 #18,35
+    windowsize_default = 18 #18,35
     gpuEnable = 1  # 1:有効化
     batchsize = 50
     efactor = 1.414
@@ -549,7 +549,7 @@ def main():
 
     if procDIR: #処理可の画像ファイルを確認
         tmp = os.listdir(test_dir)
-        files = sorted([os.path.join(test_dir, x) for x in tmp if os.path.isfile(test_dir + x)])
+        files = sorted([os.path.join(test_dir, x) for x in tmp if os.path.isfile(os.path.join(test_dir,x))])
         for i in files:
             root, ext = os.path.splitext(i)
             if ext == ".tif" or ext == ".jpg" or ext == ".png":
@@ -664,8 +664,10 @@ def main():
 
         if TestOnly:
             result_testonly = np.array(img)
+            detectobjects = len([x for x in slidewindows if x.result == 1])
             for i in slidewindows:
-                i.draw(result_testonly,"TESTONLY")
+                if i.result == 1:
+                    i.draw(result_testonly,"TESTONLY")
         else:  # Detection Result Validation
             logger.debug("analyzing results...")
             start = time.time()
