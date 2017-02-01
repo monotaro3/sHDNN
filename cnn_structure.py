@@ -101,3 +101,22 @@ class CNN_dropout2_LRN2(Chain):
         h4 = F.dropout(self.fc1(h3), ratio=0.5, train=self.train)
         y = self.fc2(h4)
         return y
+
+class CNN_dropout2_40_16_16filters(Chain):
+    def __init__(self,train=True):
+        super(CNN_dropout2_40_16_16filters, self).__init__(
+            conv1=L.Convolution2D(3, 40, 7),
+            conv2=L.Convolution2D(40, 16, 4),
+            conv3=L.Convolution2D(16, 16, 4),
+            fc1=L.Linear(144,144),
+            fc2=L.Linear(144, 2)
+        )
+        self.train = train
+
+    def __call__(self, x):
+        h1 = F.max_pooling_2d(F.relu(self.conv1(x)), 2, 2)
+        h2 = F.max_pooling_2d(F.relu(self.conv2(h1)), 2, 2)
+        h3 = F.max_pooling_2d(F.relu(self.conv3(h2)), 2, 2)
+        h4 = F.dropout(self.fc1(h3),ratio=0.5,train=self.train)
+        y = self.fc2(h4)
+        return y
