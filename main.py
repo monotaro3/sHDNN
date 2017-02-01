@@ -31,6 +31,7 @@ class slidingwindow():
         self.bVdetect = False
         self.locatedistance = locatedistance
         self.result = None
+        self.result_probability = None
         self.mesh_idx_x = None
         self.mesh_idx_y = None
         self.overlap = 0
@@ -59,22 +60,28 @@ class slidingwindow():
         #step = self.slidestep / math.sqrt((centerX - (img_xmax - img_xmin)/2)**2 + (centerY - (img_ymax - img_ymin)/2)**2)
         #self.x , self.y = self.x + int(centerX -  (img_xmax - img_xmin)/2)*step, self.y + int(centerY - (img_ymax - img_ymin)/2)*step #move as much as slidestep
 
-    def draw(self,img, flags):
+    def draw(self,img, flags,show_probability):
         if flags == "TESTONLY":
+            color = (132, 33, 225)
             cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
-                             (132, 33, 225))
+                             color)
         else:
             if flags["FN"]:
+                color = (0, 255, 0)
                 if self.result == 0 and self.bVcover == True: #False Negative with green
                     cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
-                                 (0, 255, 0))
+                                 color)
             if flags["TP"]:
+                color = (0, 0, 255)
                 if self.result == 1 and self.bVcover == True: #True Positive with red
-                    cv.rectangle(img, (self.x, self.y), (self.x+self.windowsize-1, self.y+self.windowsize-1), (0, 0, 255))
+                    cv.rectangle(img, (self.x, self.y), (self.x+self.windowsize-1, self.y+self.windowsize-1), color)
             if flags["FP"]:
+                color = (255, 0, 0)
                 if self.result == 1 and self.bVcover == False: #False Positive with blue
                     cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
-                                 (255, 0, 0))
+                                 color)
+        if show_probability:
+            cv.putText(img,"{0:.4f}".format(self.result_probability),(self.x, self.y),cv.FONT_HERSHEY_PLAIN,0.5,color)
 
     def draw_(self,img):
         cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
@@ -208,7 +215,7 @@ def getslidewindows(img,windowsize,meshsize, slide_param,overlap_sort_reverse, s
     windows2 = None
     windows3 = None
 
-    multiprocess = 0 #マルチプロセス 1:有効化　ただしデバッグ使用不可
+    multiprocess = 1 #マルチプロセス 1:有効化　ただしデバッグ使用不可
     if multiprocess == 1:
         with futures.ProcessPoolExecutor() as executor:     #マルチプロセス処理
             mappings = {executor.submit(makeslidingwindows,n,windowsize,slide_param): n for n in values}
@@ -473,7 +480,7 @@ def predictor(data,cnn_path,batch,gpu = 0):
     for i in r:
         if gpu == 1:x = cuda.to_gpu(data[i:i+batch])
         else:x = data[i:i+batch]
-        result = F.softmax(model.predictor(x).data).data.argmax(axis=1)
+        result = F.softmax(model.predictor(x).data).data  #.argmax(axis=1)
         if gpu == 1:result = cuda.to_cpu(result)
         if i == 0:
             results = result
@@ -483,7 +490,7 @@ def predictor(data,cnn_path,batch,gpu = 0):
     else:j = i + batch
     if gpu == 1:x = cuda.to_gpu(data[j:])
     else:x = data[j:]
-    result = F.softmax(model.predictor(x).data).data.argmax(axis=1)
+    result = F.softmax(model.predictor(x).data).data  #.argmax(axis=1)
     if gpu == 1: result = cuda.to_cpu(result)
     if len(r) == 0:
         results = result
@@ -512,6 +519,7 @@ def main():
     overlap_sort_reverse = True
     meshsize = 50
 
+    show_probability = True
     geoRef = True
     shpOutput = True
 
@@ -653,21 +661,24 @@ def main():
         mean_image = np.load(mean_image_path) #平均画像ロード
         npwindows -= mean_image
 
+        #predict windows
         logger.debug("predicting windows...")
         start = time.time()
-        results = predictor(npwindows,cnn_path,batchsize,gpu=gpuEnable)
+        results_probability = predictor(npwindows,cnn_path,batchsize,gpu=gpuEnable)
+        results = results_probability.argmax(axis=1)
         end = time.time()
         time_predicting = end - start
         logger.debug("finished.(%.3f seconds)" % time_predicting)
         for i in range(len(slidewindows)):
             slidewindows[i].result = results[i]
+            slidewindows[i].result_probability = results_probability[i][1]
 
         if TestOnly:
             result_testonly = np.array(img)
             detectobjects = len([x for x in slidewindows if x.result == 1])
             for i in slidewindows:
                 if i.result == 1:
-                    i.draw(result_testonly,"TESTONLY")
+                    i.draw(result_testonly,"TESTONLY",show_probability)
         else:  # Detection Result Validation
             logger.debug("analyzing results...")
             start = time.time()
@@ -826,8 +837,8 @@ def main():
                 else:
                     FN += 1
                 if i.result == 1: detectobjects += 1
-                i.draw(result_img1, {"TP": True, "FP": True, "FN": True})
-                i.draw(result_img2, {"TP": True, "FP": True, "FN": False})
+                i.draw(result_img1, {"TP": True, "FP": True, "FN": True},show_probability)
+                i.draw(result_img2, {"TP": True, "FP": True, "FN": False},show_probability)
             nGT = len(gt_vehicles)
             DR = len([x for x in gt_vehicles if x.covered == True]) / nGT
             n_detected_vehicles = len([x for x in gt_vehicles if x.detected == True])
