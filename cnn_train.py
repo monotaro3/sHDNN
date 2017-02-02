@@ -164,6 +164,8 @@ def cnn_train():
 
     if modelload:serializers.load_npz(model_path, model)
     optimizer.setup(model)
+    #add regularization
+    optimizer.add_hook(chainer.optimizer.Lasso(0.003))
     if modelload:serializers.load_npz(optimizer_path, optimizer)
     if(gpu_Enable):model.to_gpu()
 
