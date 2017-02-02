@@ -61,27 +61,33 @@ class slidingwindow():
         #self.x , self.y = self.x + int(centerX -  (img_xmax - img_xmin)/2)*step, self.y + int(centerY - (img_ymax - img_ymin)/2)*step #move as much as slidestep
 
     def draw(self,img, flags,show_probability):
+        draw = False
         if flags == "TESTONLY":
             color = (132, 33, 225)
             cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
                              color)
+            draw =True
         else:
             if flags["FN"]:
-                color = (0, 255, 0)
                 if self.result == 0 and self.bVcover == True: #False Negative with green
+                    color = (0, 255, 0)
                     cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
                                  color)
+                    draw = True
             if flags["TP"]:
-                color = (0, 0, 255)
                 if self.result == 1 and self.bVcover == True: #True Positive with red
+                    color = (0, 0, 255)
                     cv.rectangle(img, (self.x, self.y), (self.x+self.windowsize-1, self.y+self.windowsize-1), color)
+                    draw = True
             if flags["FP"]:
-                color = (255, 0, 0)
                 if self.result == 1 and self.bVcover == False: #False Positive with blue
+                    color = (255, 0, 0)
                     cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
                                  color)
-        if show_probability:
-            cv.putText(img,"{0:.4f}".format(self.result_probability),(self.x, self.y-1 if self.y-2 >=0 else self.y),cv.FONT_HERSHEY_PLAIN,0.6,color)
+                    draw = True
+        if draw and show_probability:
+            cv.putText(img, "{0:.4f}".format(self.result_probability),
+                       (self.x, self.y - 1 if self.y - 2 >= 0 else self.y), cv.FONT_HERSHEY_PLAIN, 0.6, color)
 
     def draw_(self,img):
         cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
@@ -499,13 +505,13 @@ def predictor(data,cnn_path,batch,gpu = 0):
     return results
 
 def main():
-    TestOnly = True
+    TestOnly = False
     procDIR = True  # ディレクトリ内ファイル一括処理
     showImage = False  # 処理後画像表示　ディレクトリ内処理の場合はオフ
     imgpath = "C:/work/vehicle_detection/images/test/kurume_yumetown.tif"  # 単一ファイル処理
-    test_dir = "e:/work/yangon_satimage/test_2"#"../vehicle_detection/images/test/"
-    result_dir = "e:/work/yangon_satimage/test_2/1color" #"../vehicle_detection/images/test/sHDNN/rot_bgrot" #""../vehicle_detection/images/result/"
-    cnn_dir = "model/yangon_1color_bg35_rot_rot_dropout2_adam_whole"
+    test_dir = "../vehicle_detection/images/test/" #"e:/work/yangon_satimage/test_2"
+    result_dir = "../vehicle_detection/images/test/sHDNN/rot" #"e:/work/yangon_satimage/test_2/2color"
+    cnn_dir = "model/vd_bg35_rot_noBING_Adam_dropout2_40filters"
     cnn_classifier = "gradient_cnn.npz"
     cnn_optimizer = "gradient_optimizer.npz"
     mean_image_dir = ""
