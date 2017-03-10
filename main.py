@@ -46,6 +46,7 @@ class slidingwindow():
         self.connections = []
         self.connections2 = []
         self.cVehicle = None
+        self.detectVehicle = None # set vehicle object that this window detected
 
     def movetocentroid(self,img):
         img_height,img_width = img.shape
@@ -93,7 +94,7 @@ class slidingwindow():
         cv.rectangle(img, (self.x, self.y), (self.x + self.windowsize - 1, self.y + self.windowsize - 1),
                      (0, 255, 0))
 
-    def windowimg(self,img): #arg:RGB image
+    def windowimg(self,img,raw = False): #arg:RGB image
         img_height,img_width,channnel = img.shape
         xmin = self.x
         ymin = self.y
@@ -103,6 +104,7 @@ class slidingwindow():
         if ymin < 0:ymin = 0
         if xmax > img_width:xmax = img_width
         if ymax > img_height:ymax = img_height
+        if raw == True: return img[ymin:ymax,xmin:xmax,:]
         return cv.resize(img[ymin:ymax,xmin:xmax,:],(48,48)).transpose(2,0,1)/255.
 
     def cover(self,bbox):
@@ -128,6 +130,18 @@ class vehicle():
         self.connections2 = []
         self.covered = False
         self.detected = False
+
+    def windowimg(self,img):
+        img_height, img_width, channnel = img.shape
+        xmin = self.bbox[0] - 1
+        ymin = self.bbox[1] - 1
+        xmax = self.bbox[2]
+        ymax = self.bbox[3]
+        if xmin < 0: xmin = 0
+        if ymin < 0: ymin = 0
+        if xmax > img_width: xmax = img_width
+        if ymax > img_height: ymax = img_height
+        return img[ymin:ymax, xmin:xmax, :]
 
 class connection():
     def __init__(self,obj1,obj2,distance):
@@ -221,7 +235,7 @@ def getslidewindows(img,windowsize,meshsize, slide_param,overlap_sort_reverse, s
     windows2 = None
     windows3 = None
 
-    multiprocess = 1 #マルチプロセス 1:有効化　ただしデバッグ使用不可
+    multiprocess = 0 #マルチプロセス 1:有効化　ただしデバッグ使用不可
     if multiprocess == 1:
         with futures.ProcessPoolExecutor() as executor:     #マルチプロセス処理
             mappings = {executor.submit(makeslidingwindows,n,windowsize,slide_param): n for n in values}
@@ -510,8 +524,8 @@ def main():
     showImage = False  # 処理後画像表示　ディレクトリ内処理の場合はオフ
     imgpath = "C:/work/vehicle_detection/images/test/kurume_yumetown.tif"  # 単一ファイル処理
     test_dir = "../vehicle_detection/images/test/" #"e:/work/yangon_satimage/test_2"
-    result_dir = "../vehicle_detection/images/test/sHDNN/rot" #"e:/work/yangon_satimage/test_2/2color"
-    cnn_dir = "model/vd_bg35_rot_noBING_Adam_dropout2_40filters"
+    result_dir = "../vehicle_detection/images/test/sHDNN/rot350" #"e:/work/yangon_satimage/test_2/2color"
+    cnn_dir = "model/vd_bg350_rot_noBING_Adam_dropout2_whole"
     cnn_classifier = "gradient_cnn.npz"
     cnn_optimizer = "gradient_optimizer.npz"
     mean_image_dir = ""
@@ -519,15 +533,16 @@ def main():
     logfile_name = "gradient_cnn.log"
     windowsize_default = 18 #18,35
     gpuEnable = 1  # 1:有効化
-    batchsize = 50
+    batchsize = 100
     efactor = 1.414
     locatedistance = 0.45
     overlap_sort_reverse = True
     meshsize = 50
 
-    show_probability = True
+    show_probability = False
     geoRef = True
     shpOutput = True
+    Output_For_Debug = True
 
     if result_dir == "":
         if procDIR: result_dir = test_dir
@@ -739,7 +754,7 @@ def main():
                                 connections1.append(c)
                                 i.connections.append(c)
                                 j.connections.append(c)
-                                c = connection(i, j, distance) #dupulicate
+                                c = connection(i, j, distance) #duplicate
                                 connections2.append(c)
                                 i.connections2.append(c)
                                 j.connections2.append(c)
@@ -773,6 +788,7 @@ def main():
                             c.obj2.bVdetect = True
                             if c.obj1.detected == False:
                                 c.obj1.detected = True
+                                i.detectVehicle = c.obj1
                                 for i in c.obj2.connections2:
                                     i.valid = False
 
@@ -888,6 +904,73 @@ def main():
         result_img2_path = os.path.join(result_dir, root + "_sHDNN_TP_FP" + f_startdate + exe)
         shpdir = os.path.join(result_dir,"shp")
         shppath = os.path.join(shpdir, root + "sHDNN_vc_detected" + f_startdate + ".shp")
+
+        #generate result visualization output for evaluation
+        if Output_For_Debug and (not TestOnly):
+            debug_file_path = os.path.join(result_dir,"debug")
+            if not os.path.isdir(debug_file_path):
+                os.makedirs(debug_file_path)
+            eval_img_width_max = 1000
+            #for TP
+            tile_columns = int(eval_img_width_max / slidewindowsize)
+            eval_img_width_max = tile_columns * slidewindowsize
+            tile_rows = math.ceil(TP / tile_columns)
+            eval_img = np.zeros((tile_rows*slidewindowsize,tile_columns*slidewindowsize,3),np.uint8)
+            write_pointer = [0,0] #opencv coordinate
+            for i in slidewindows:
+                if i.result == 1 and i.bVcover == True:
+                    img_patch = i.windowimg(img,raw=True)
+                    eval_img[write_pointer[0]:write_pointer[0]+img_patch.shape[0],
+                    write_pointer[1]:write_pointer[1]+img_patch.shape[1],
+                    :] = img_patch
+                    write_pointer[1] = (write_pointer[1] + slidewindowsize) % eval_img_width_max
+                    if write_pointer[1] == 0: write_pointer[0] += slidewindowsize
+            cv.imwrite(os.path.join(debug_file_path,root + "_sHDNN_TPpatch_visualization" + f_startdate + ".jpg"),eval_img)
+            #for FP
+            tile_rows = math.ceil(FP / tile_columns)
+            eval_img = np.zeros((tile_rows * slidewindowsize, tile_columns * slidewindowsize, 3), np.uint8)
+            write_pointer = [0, 0]  # opencv coordinate
+            for i in slidewindows:
+                if i.result == 1 and i.bVcover == False:
+                    img_patch = i.windowimg(img, raw=True)
+                    eval_img[write_pointer[0]:write_pointer[0] + img_patch.shape[0],
+                    write_pointer[1]:write_pointer[1] + img_patch.shape[1],
+                    :] = img_patch
+                    write_pointer[1] = (write_pointer[1] + slidewindowsize) % eval_img_width_max
+                    if write_pointer[1] == 0: write_pointer[0] += slidewindowsize
+            cv.imwrite(os.path.join(debug_file_path, root + "_sHDNN_FPpatch_visualization" + f_startdate + ".jpg"),
+                       eval_img)
+            #for undetected GT and associated FN
+            tile_columns = 12  #1 GT and tile_columns-2 FNs
+            tile_rows = 0
+            eval_img_width_max = tile_columns * gtwindowsize
+            for i in gt_vehicles:
+                if i.detected == False:
+                    #tile_rows += math.ceil(len(filter(lambda x: x.obj2.result == 0,i.connections))/(tile_columns-2))
+                    tile_rows += math.ceil(len([x for x in i.connections if x.obj2.result == 0])/(tile_columns-2))
+            eval_img = np.zeros((tile_rows * gtwindowsize, tile_columns * gtwindowsize, 3), np.uint8)
+            write_pointer = [0, 0]  # opencv coordinate
+            for i in gt_vehicles:
+                if i.detected == False:
+                    img_patch = i.windowimg(img)
+                    eval_img[write_pointer[0]:write_pointer[0] + img_patch.shape[0],
+                    write_pointer[1]:write_pointer[1] + img_patch.shape[1],
+                    :] = img_patch
+                    write_pointer[1] += gtwindowsize * 2
+                    FNs = [x.obj2 for x in [x for x in i.connections if x.obj2.result == 0]]
+                    for j in FNs:
+                        img_patch = j.windowimg(img,raw=True)
+                        eval_img[write_pointer[0]:write_pointer[0] + img_patch.shape[0],
+                        write_pointer[1]:write_pointer[1] + img_patch.shape[1],
+                        :] = img_patch
+                        write_pointer[1] = (write_pointer[1] + gtwindowsize) % eval_img_width_max
+                        if write_pointer[1] == 0:
+                            write_pointer[1] += gtwindowsize * 2
+                            write_pointer[0] += gtwindowsize
+                    if write_pointer[1] != gtwindowsize * 2: write_pointer[0] += gtwindowsize
+                    write_pointer[1] = 0
+            cv.imwrite(os.path.join(debug_file_path, root + "_sHDNN_undetectedGT_FN_visualization" + f_startdate + ".jpg"),
+                       eval_img)
 
         if geoRef:
             if TestOnly:
