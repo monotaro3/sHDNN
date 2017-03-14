@@ -56,6 +56,14 @@ def make_bgimg(img,size,number,bboxes,dataset_img_size,angles):
     y_max = y-size
     bg_imgs = []
     i = 0
+    DEBUG = False
+    #debug>>
+    if DEBUG:
+        dbg_img = np.zeros(img.shape,np.uint8)
+        dbg_density_img = np.zeros(img.shape,np.int32)
+        for b in bboxes:
+            dbg_img[b[1]:b[3],b[0]:b[2],0] = 255
+    #<<debug
     while i < number:
     #for i in range(number):
         pos_x = randint(0,x_max)
@@ -67,8 +75,25 @@ def make_bgimg(img,size,number,bboxes,dataset_img_size,angles):
                 break
         if if_bg:
             bg_imgs.append((cv.resize(img[pos_x:pos_x+size,pos_y:pos_y+size,:],dataset_img_size)).transpose(2, 0, 1))
+            #debug>>
+            if DEBUG:
+                dbg_img[pos_x:pos_x+size,pos_y:pos_y+size,2] = 255
+                dbg_density_img[pos_x:pos_x+size,pos_y:pos_y+size,2] +=10
+            #<<debug
             if len(angles) != 0:make_rotated_bboximg([pos_y,pos_x,pos_y+size-1,pos_x+size-1],img,bg_imgs,angles,dataset_img_size)
             i += 1
+    #debug>>
+    if DEBUG:
+        dbg_density_img[dbg_density_img>255] = 255
+        num = 0
+        dbgpath = "traindata_debug"
+        if not os.path.isdir(dbgpath):
+            os.makedirs(dbgpath)
+        while os.path.isfile(os.path.join(dbgpath,str(num)+".jpg")):
+            num += 1
+        cv.imwrite(os.path.join(dbgpath,str(num)+".jpg"),dbg_img)
+        cv.imwrite(os.path.join(dbgpath,str(num)+"_density.jpg"),dbg_density_img.astype(np.uint8))
+    #<<debug
     return bg_imgs
 
 def calcIoU(a, b):  # (xmin,ymin,xmax,ymax)
@@ -194,9 +219,9 @@ def make_datasets(img_dir,bg_ratio,angles,dataset_img_size,useBINGProposals,BING
     return vehicle_images,bg_images
 
 def main():
-    img_dir = "../vehicle_detection/yangon_satimage/train" #"../vehicle_detection/images/train/"
+    img_dir = "../vehicle_detection/images/train/" #"../vehicle_detection/yangon_satimage/train"
     bg_bias = 35
-    data_dir = "data/yangon_test"
+    data_dir = "data/test"
     data_name_prefix = "data"
     val_name_prefix = "val"
     meanimg_name = "mean_image.npy"
@@ -205,7 +230,7 @@ def main():
 
     # [9.0, 18.0, 27.0, 36.0, 45.0, 54.0, 63.0, 72.0, 81.0, 90.0]
     angles = [[9.0, 18.0, 27.0, 36.0, 45.0, 54.0, 63.0, 72.0, 81.0, 90.0], \
-              [9.0, 18.0, 27.0, 36.0, 45.0, 54.0, 63.0, 72.0, 81.0, 90.0]\
+              []\
               ]  # set [] for each if rotation is not necessary. angle[0]:groundtruth, angle[1]:background
 
     useBINGProposals = False
@@ -244,7 +269,7 @@ def main():
     #     cv.destroyAllWindows()
 
     #split if data is too big
-    bytes_per_img = dataset_img_size[0] * dataset_img_size[1] * 3 * 4  #assume 3 channels
+    bytes_per_img = dataset_img_size[0] * dataset_img_size[1] * 3 * 4  #assume 3 channels, float32
     splitsize_bytes = MAX_datasize_GB * 1024**3
     split_number = 0
     while((split_number+10000)*bytes_per_img<splitsize_bytes):
