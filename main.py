@@ -940,6 +940,45 @@ def main():
                     if write_pointer[1] == 0: write_pointer[0] += slidewindowsize
             cv.imwrite(os.path.join(debug_file_path, root + "_sHDNN_FPpatch_visualization" + f_startdate + ".jpg"),
                        eval_img)
+            #for undetected GT
+            tile_columns = int(eval_img_width_max / gtwindowsize)
+            tile_rows = math.ceil(len([x for x in gt_vehicles if x.detected == False]) / tile_columns)
+            eval_img = np.zeros((tile_rows * gtwindowsize, tile_columns * gtwindowsize, 3), np.uint8)
+            write_pointer = [0, 0]  # opencv coordinate
+            for i in [x for x in gt_vehicles if x.detected == False]:
+                img_patch = i.windowimg(img)
+                eval_img[write_pointer[0]:write_pointer[0] + img_patch.shape[0],
+                write_pointer[1]:write_pointer[1] + img_patch.shape[1],
+                :] = img_patch
+                write_pointer[1] += gtwindowsize
+                if write_pointer[1] + gtwindowsize > eval_img_width_max:
+                    write_pointer[1] = 0
+                    write_pointer[0] += gtwindowsize
+                # write_pointer[1] = (write_pointer[1] + gtwindowsize) % eval_img_width_max
+                # if write_pointer[1] == 0: write_pointer[0] += gtwindowsize
+            cv.imwrite(os.path.join(debug_file_path, root + "_sHDNN_undetectedGT_visualization" + f_startdate + ".jpg"),
+                       eval_img)
+            #for FN assosiated with undetected GT
+            tile_columns = int(eval_img_width_max / slidewindowsize)
+            targetFN_num = 0
+            for i in gt_vehicles:
+                if i.detected == False:
+                    targetFN_num += len([x for x in i.connections if x.obj2.result == 0])
+            tile_rows = math.ceil(targetFN_num / tile_columns)
+            eval_img = np.zeros((tile_rows * slidewindowsize, tile_columns * slidewindowsize, 3), np.uint8)
+            write_pointer = [0, 0]  # opencv coordinate
+            for i in gt_vehicles:
+                if i.detected == False:
+                    for j in [x.obj2 for x in i.connections if x.obj2.result == 0]:
+                        img_patch = j.windowimg(img, raw=True)
+                        eval_img[write_pointer[0]:write_pointer[0] + img_patch.shape[0],
+                        write_pointer[1]:write_pointer[1] + img_patch.shape[1],
+                        :] = img_patch
+                        write_pointer[1] = (write_pointer[1] + slidewindowsize) % eval_img_width_max
+                        if write_pointer[1] == 0: write_pointer[0] += slidewindowsize
+            cv.imwrite(os.path.join(debug_file_path,
+                                    root + "_sHDNN_FNpatch_to_undetectedGT_visualization" + f_startdate + ".jpg"),
+                       eval_img)
             #for undetected GT and associated FN
             tile_columns = 12  #1 GT and tile_columns-2 FNs
             tile_rows = 0
