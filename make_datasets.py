@@ -56,7 +56,7 @@ def make_bgimg(img,size,number,bboxes,dataset_img_size,angles):
     y_max = y-size
     bg_imgs = []
     i = 0
-    DEBUG = False
+    DEBUG = False #output image of bg-patch coverage and density
     #debug>>
     if DEBUG:
         dbg_img = np.zeros(img.shape,np.uint8)
@@ -211,6 +211,37 @@ def make_datasets(img_dir,bg_ratio,angles,dataset_img_size,useBINGProposals,BING
         vehicle_imgs,bg_imgs = make_car_bg_images(img_path,windowsize,bg_number,angles,dataset_img_size)
         vehicle_images.extend(vehicle_imgs)
         bg_images.extend(bg_imgs)
+        #debug>>
+        #output images of gt and bg patches for debug
+        if False:
+            patchsize = dataset_img_size[0]
+            width = 1000
+            height = math.ceil(len(vehicle_imgs) / int(width/patchsize)) * patchsize
+            write_pointer = [0,0]
+
+            dbgpath = "traindata_debug"
+            if not os.path.isdir(dbgpath):
+                os.makedirs(dbgpath)
+            dbg_img = np.zeros((height,width,3),np.uint8)
+            for i in range(len(vehicle_imgs)):
+                dbg_img[write_pointer[0]:write_pointer[0]+patchsize,
+                write_pointer[1]:write_pointer[1]+patchsize,:] = vehicle_imgs[i].transpose(1,2,0)
+                write_pointer[1] += patchsize
+                if write_pointer[1] + patchsize > width:
+                    write_pointer[1] = 0
+                    write_pointer[0] += patchsize
+            root,ext = os.path.splitext(os.path.basename(img_path))
+            cv.imwrite(os.path.join(dbgpath,root+"_gtpatches.jpg"),dbg_img)
+            write_pointer = [0,0]
+            for i in range(len(vehicle_imgs) if len(vehicle_imgs) < len(bg_imgs) else len(bg_imgs)):
+                dbg_img[write_pointer[0]:write_pointer[0] + patchsize,
+                write_pointer[1]:write_pointer[1] + patchsize, :] = bg_imgs[i].transpose(1, 2, 0)
+                write_pointer[1] += patchsize
+                if write_pointer[1] + patchsize > width:
+                    write_pointer[1] = 0
+                    write_pointer[0] += patchsize
+            cv.imwrite(os.path.join(dbgpath, root + "_bgpatches.jpg"),dbg_img)
+        #<<debug
 
         if useBINGProposals:
             bing_path = i + ".bng"
@@ -231,7 +262,7 @@ def main():
     MAX_datasize_GB = 5
 
     # [9.0, 18.0, 27.0, 36.0, 45.0, 54.0, 63.0, 72.0, 81.0, 90.0]
-    angles = [[9.0, 18.0, 27.0, 36.0, 45.0, 54.0, 63.0, 72.0, 81.0, 90.0], \
+    angles = [[], \
               []\
               ]  # set [] for each if rotation is not necessary. angle[0]:groundtruth, angle[1]:background
 
