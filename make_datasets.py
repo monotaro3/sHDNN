@@ -84,7 +84,9 @@ def make_bgimg(img,size,number,bboxes,dataset_img_size,angles):
             i += 1
     #debug>>
     if DEBUG:
-        dbg_density_img[dbg_density_img>255] = 255
+        density_max = np.max(dbg_density_img)
+        dbg_density_img = dbg_density_img / math.ceil(density_max/255)
+        #dbg_density_img[dbg_density_img>255] = 255
         num = 0
         dbgpath = "traindata_debug"
         if not os.path.isdir(dbgpath):
