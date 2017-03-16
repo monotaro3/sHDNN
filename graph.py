@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import os
 import logging
 
-def genGraph(log_dir):
+def genGraph(log_dir, x_interval_rescale_divide = 1):
     logger = logging.getLogger("__main__." + __name__)
 
     tmp = os.listdir(log_dir)
@@ -23,15 +23,17 @@ def genGraph(log_dir):
 
     train_acc = []
     valid_acc = []
+    train_loss = []
+    valid_loss = []
 
-    fig_name = "accuracy.png"
-    valid_fig_name = "valid_accuracy.png"
+    acc_fig_name = "accuracy.png"
+    loss_fig_name = "valid_accuracy.png"
 
     graph_dir = os.path.join(log_dir, "graph")
     if not os.path.isdir(graph_dir): os.makedirs(graph_dir)
 
-    fig_path = os.path.join(graph_dir, fig_name)
-    valid_fig_path = os.path.join(graph_dir, valid_fig_name)
+    acc_fig_path = os.path.join(graph_dir, acc_fig_name)
+    loss_fig_path = os.path.join(graph_dir, loss_fig_name)
 
     #f = open("C:/work/PycharmProjects/gradient_slide_cnn/model/2016100717_35t_1000/log","r")
     #f2 = open("C:/work/PycharmProjects/gradient_slide_cnn/model/2016090901_1000/log","r")
@@ -45,41 +47,52 @@ def genGraph(log_dir):
             return
 
         while(line):
-            if line.find("\"main/accuracy\"") > -1:
-                start = line.find(":") + 1
+            start = line.find(":")
+            if start != -1:
+                start += 1
                 end = line.find(",")
                 if end == -1:
-                    train_acc.append(float(line[start:]))
+                    value = float(line[start:])
                 else:
-                    train_acc.append(float(line[start:end]))
+                    value = float(line[start:end])
+                if line.find("\"main/accuracy\"") > -1:
+                    train_acc.append(value)
+                elif line.find("\"validation/main/accuracy\"") > -1:
+                    valid_acc.append(value)
+                elif line.find("\"main/loss\"") > -1:
+                    train_loss.append(value)
+                elif line.find("\"validation/main/loss\"") > -1:
+                    valid_loss.append(value)
             line = f.readline()
 
-    for logfile in logfiles: # for validation accuracy
-        f = open(logfile, "r")
-        line = f.readline()
-        while(line):
-            if line.find("\"validation/main/accuracy\"") > -1:
-                start = line.find(":") + 1
-                end = line.find(",")
-                if end == -1:
-                    valid_acc.append(float(line[start:]))
-                else:
-                    valid_acc.append(float(line[start:end]))
-            line = f.readline()
+    x_values =[]
+    for i in range(len(train_acc)):
+        x_values.append((i+1)/x_interval_rescale_divide)
 
     plt.title("Training / Validation Accuracy")
     plt.ylabel("Accuracy")
     plt.xlabel("epoch")
-    plt.plot(train_acc, label="Training")
-    plt.plot(valid_acc, label="Validation")
+    plt.plot(x_values,train_acc, label="Training")
+    plt.plot(x_values,valid_acc, label="Validation")
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.subplots_adjust(right=0.7)
-    plt.savefig(fig_path)
+    plt.savefig(acc_fig_path)
     #plt.show()
+
+    plt.figure()
+    plt.title("Training / Validation Loss")
+    plt.ylabel("Loss")
+    plt.xlabel("epoch")
+    plt.plot(x_values, train_loss, label="Training")
+    plt.plot(x_values, valid_loss, label="Validation")
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.subplots_adjust(right=0.7)
+    plt.savefig(loss_fig_path)
+
     logger.debug("Graph was generated succesfully.")
 
 if __name__ == "__main__":
-    log_dir = "C:/work/sHDNN/model/vd_bg35_rot_noBING_0001/trainlog"
+    log_dir = "C:/work/sHDNN/model/vd_bg350_rot_noBING_Adam_dropout2_whole/trainlog"
 
     logger = logging.getLogger(__name__)
     s_handler = logging.StreamHandler()
@@ -89,5 +102,5 @@ if __name__ == "__main__":
     logger.addHandler(s_handler)
     #logger.addHandler(f_handler)
 
-    genGraph(log_dir)
+    genGraph(log_dir,x_interval_rescale_divide=7)
 
