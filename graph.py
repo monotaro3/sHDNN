@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import os
 import logging
 
-def genGraph(log_dir, x_interval_rescale_divide = 1):
+def genGraph(log_dir, x_interval_rescale_divide = 1,fig_size = (8,6)):
     logger = logging.getLogger("__main__." + __name__)
 
     tmp = os.listdir(log_dir)
@@ -69,6 +69,7 @@ def genGraph(log_dir, x_interval_rescale_divide = 1):
     for i in range(len(train_acc)):
         x_values.append((i+1)/x_interval_rescale_divide)
 
+    plt.figure(figsize=fig_size)
     plt.title("Training / Validation Accuracy")
     plt.ylabel("Accuracy")
     plt.xlabel("epoch")
@@ -79,7 +80,7 @@ def genGraph(log_dir, x_interval_rescale_divide = 1):
     plt.savefig(acc_fig_path)
     #plt.show()
 
-    plt.figure()
+    plt.figure(figsize=fig_size)
     plt.title("Training / Validation Loss")
     plt.ylabel("Loss")
     plt.xlabel("epoch")
@@ -102,5 +103,5 @@ if __name__ == "__main__":
     logger.addHandler(s_handler)
     #logger.addHandler(f_handler)
 
-    genGraph(log_dir,x_interval_rescale_divide=7)
+    genGraph(log_dir,x_interval_rescale_divide=7,fig_size=(20,6))
 
