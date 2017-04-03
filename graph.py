@@ -5,6 +5,8 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import os
 import logging
+import numpy as np
+from scipy import signal
 
 def genGraph(log_dir, x_interval_rescale_divide = 1,fig_size = (8,6)):
     logger = logging.getLogger("__main__." + __name__)
@@ -27,7 +29,7 @@ def genGraph(log_dir, x_interval_rescale_divide = 1,fig_size = (8,6)):
     valid_loss = []
 
     acc_fig_name = "accuracy.png"
-    loss_fig_name = "valid_accuracy.png"
+    loss_fig_name = "loss.png"
 
     graph_dir = os.path.join(log_dir, "graph")
     if not os.path.isdir(graph_dir): os.makedirs(graph_dir)
@@ -65,6 +67,13 @@ def genGraph(log_dir, x_interval_rescale_divide = 1,fig_size = (8,6)):
                     valid_loss.append(value)
             line = f.readline()
 
+    #leveling by Savitzky-Golay filter
+    if False:
+        train_acc = signal.savgol_filter(np.array(train_acc), 51, 3)
+        valid_acc = signal.savgol_filter(np.array(valid_acc), 51, 3)
+        train_loss = signal.savgol_filter(np.array(train_loss), 51, 3)
+        valid_loss = signal.savgol_filter(np.array(valid_loss), 51, 3)
+
     x_values =[]
     for i in range(len(train_acc)):
         x_values.append((i+1)/x_interval_rescale_divide)
@@ -73,6 +82,7 @@ def genGraph(log_dir, x_interval_rescale_divide = 1,fig_size = (8,6)):
     plt.title("Training / Validation Accuracy")
     plt.ylabel("Accuracy")
     plt.xlabel("epoch")
+    #plt.ylim([0.995,1])
     plt.plot(x_values,train_acc, label="Training")
     plt.plot(x_values,valid_acc, label="Validation")
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
@@ -84,6 +94,7 @@ def genGraph(log_dir, x_interval_rescale_divide = 1,fig_size = (8,6)):
     plt.title("Training / Validation Loss")
     plt.ylabel("Loss")
     plt.xlabel("epoch")
+    #plt.ylim([0,0.02])
     plt.plot(x_values, train_loss, label="Training")
     plt.plot(x_values, valid_loss, label="Validation")
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
