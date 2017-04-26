@@ -55,10 +55,11 @@ def cnn_trainer(model,optimizer,epoch,batchsize,gpu_device,data,val,traindata_ra
     trainer.run()
 
 
-def cnn_train():
-    modelload = False # 既存のモデルを読み込んでトレーニング
 
-    model_dir = "model/vd_bg350_rot_noBING_Adam_dropout2_each"
+def cnn_train():
+    modelload = True # 既存のモデルを読み込んでトレーニング
+
+    model_dir = "model/vd_bg35_rot_noBING_Adam_dropout2_0.5m"
     model_name = "gradient_cnn.npz"
     optimizer_name = "gradient_optimizer.npz"
     logfile_name = "cnn_train.log"
@@ -73,7 +74,7 @@ def cnn_train():
     cnn_architecture = cnn_structure.CNN_dropout2()
     optimizer = optimizers.Adam()
 
-    data_dir = "data/vd_bg350_rot_noBING"
+    data_dir = "data/vd_bg35_rot_noBING_0.5m"
     data_name_prefix = "data"
     val_name_prefix = "val"
     meanimg_name = "mean_image.npy"
@@ -165,12 +166,12 @@ def cnn_train():
     if modelload:serializers.load_npz(model_path, model)
     optimizer.setup(model)
     #add regularization
-    optimizer.add_hook(chainer.optimizer.Lasso(0.003))
+    #optimizer.add_hook(chainer.optimizer.Lasso(0.003))
     if modelload:serializers.load_npz(optimizer_path, optimizer)
     if(gpu_Enable):model.to_gpu()
 
     #training start
-    train_order_whole = False
+    train_order_whole = True
     if len(data_paths) == 1:
         data_path = data_paths[0]
         val_path = val_paths[0]
