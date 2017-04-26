@@ -146,7 +146,7 @@ class CNN_batchnorm(Chain):
 class CNN_batchnorm_Henormal(Chain):
     def __init__(self,train=True):
         initializer = chainer.initializers.HeNormal()
-        super(CNN_batchnorm_Henormal, self).__init__(
+        super(CNN_batchnorm, self).__init__(
             conv1=L.Convolution2D(3, 20, 7,initialW=initializer),
             norm1=L.BatchNormalization(20),
             conv2=L.Convolution2D(20, 8, 4,initialW=initializer),
