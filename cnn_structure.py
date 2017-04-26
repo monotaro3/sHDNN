@@ -142,3 +142,26 @@ class CNN_batchnorm(Chain):
         #h4 = F.dropout(self.fc1(h3),ratio=0.5,train=self.train)
         y = self.fc2(h3)
         return y
+
+class CNN_batchnorm_Henormal(Chain):
+    def __init__(self,train=True):
+        initializer = chainer.initializers.HeNormal()
+        super(CNN_batchnorm_Henormal, self).__init__(
+            conv1=L.Convolution2D(3, 20, 7,initialW=initializer),
+            norm1=L.BatchNormalization(20),
+            conv2=L.Convolution2D(20, 8, 4,initialW=initializer),
+            norm2=L.BatchNormalization(8),
+            conv3=L.Convolution2D(8, 8, 4,initialW=initializer),
+            norm3=L.BatchNormalization(8),
+            fc1=L.Linear(72,72,initialW=initializer),
+            fc2=L.Linear(72, 2,initialW=initializer)
+        )
+        self.train = train
+
+    def __call__(self, x):
+        h1 = F.max_pooling_2d(F.relu(self.norm1(self.conv1(x))), 2, 2)
+        h2 = F.max_pooling_2d(F.relu(self.norm2(self.conv2(h1))), 2, 2)
+        h3 = F.max_pooling_2d(F.relu(self.norm3(self.conv3(h2))), 2, 2)
+        #h4 = F.dropout(self.fc1(h3),ratio=0.5,train=self.train)
+        y = self.fc2(h3)
+        return y
