@@ -5,13 +5,7 @@ import chainer
 from chainer import report, training, Chain, datasets, iterators, optimizers,cuda,serializers
 import chainer.functions as F
 import chainer.links as L
-from chainer.training import extensions
-from chainer.datasets import tuple_dataset
-import time
-from datetime import datetime
-import cv2 as cv
-import os
-from graph import genGraph
+
 
 class vehicle_classify_CNN(Chain):
     def __init__(self):
