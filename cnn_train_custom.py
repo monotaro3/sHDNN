@@ -96,7 +96,7 @@ def load_datapaths(data_dir,data_name_prefix = "data", val_name_prefix = "val"):
         return data_paths, val_paths
 
 def dl_drain_curriculum(model_dir, data_dir, batch_learn, batch_check, epoch, snapshot_interval, from_scratch, dl_model_scratch,
-                        optimizer_scratch, gpu_use = True, traindata_ratio=0.9,trainlog_dir = "trainlog",
+                        optimizer_scratch, gpu_use = True, traindata_ratio=0.9,trainlog_dir = "trainlog",meanimg_name = "mean_image.npy",
                         *,logger = None):
     # gpu_use = True
     # epoch = 200
@@ -119,6 +119,8 @@ def dl_drain_curriculum(model_dir, data_dir, batch_learn, batch_check, epoch, sn
 
     data_paths, val_paths = load_datapaths(data_dir)
     if data_paths == 0: return -1
+
+    meanimg_path = os.path.join(data_dir,meanimg_name)
 
     if gpu_use:
         model.to_gpu()#cuda.to_gpu(model)
@@ -176,6 +178,8 @@ def dl_drain_curriculum(model_dir, data_dir, batch_learn, batch_check, epoch, sn
             val_path = val_paths[i]
             data = np.load(data_path)
             val = np.load(val_path)
+            mean_image = np.load(meanimg_path)
+            data -= mean_image
             N = (int)(len(val) * traindata_ratio)
             data_train, data_valid = np.split(data,[N])
             val_train, val_valid = np.split(val,[N])
