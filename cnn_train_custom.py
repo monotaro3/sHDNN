@@ -125,7 +125,7 @@ def dl_drain_curriculum(model_dir, model_savedir_relative, data_dir, batch_learn
 
     if not from_scratch and model_savedir_relative != "":
         model_savedir = os.path.join(model_dir,model_savedir_relative)
-        if os.path.isdir(model_savedir): os.makedirs(model_savedir)
+        if not os.path.isdir(model_savedir): os.makedirs(model_savedir)
     else:
         model_savedir = model_dir
 
@@ -304,13 +304,13 @@ if __name__ == "__main__":
 
     from_scratch = False
     gpu_use = True
-    epoch = 10
+    epoch = 200
     batch_learn = 100
     batch_check = 10000
     traindata_ratio = 0.9
     snapshot_interval = 2
 
-    model_dir = "model/vd_bg350_rot_noBING_Adam_batchnorm_Henomal_whole_test"
+    model_dir = "model/vd_bg350_rot_noBING_Adam_batchnorm_Henomal_whole_test/test"
     data_dir = "data/vd_bg35_rot_noBING_0.5m"
     model_savedir_relative = ""
 
