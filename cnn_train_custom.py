@@ -123,8 +123,9 @@ def dl_drain_curriculum(model_dir, model_savedir_relative, data_dir, batch_learn
 
     meanimg_path = os.path.join(data_dir,meanimg_name)
 
-    if model_savedir_relative != "":
+    if not from_scratch and model_savedir_relative != "":
         model_savedir = os.path.join(model_dir,model_savedir_relative)
+        if os.path.isdir(model_savedir): os.makedirs(model_savedir)
     else:
         model_savedir = model_dir
 
