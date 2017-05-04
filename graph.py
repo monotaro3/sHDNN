@@ -7,8 +7,9 @@ import os
 import logging
 import numpy as np
 from scipy import signal
+import csv
 
-def genGraph(log_dir, x_interval_rescale_divide = 1,fig_size = (8,6)):
+def genGraph(log_dir, x_interval_rescale_divide = 1,fig_size = (8,6), mode = 0):
     logger = logging.getLogger("__main__." + __name__)
 
     tmp = os.listdir(log_dir)
@@ -16,8 +17,12 @@ def genGraph(log_dir, x_interval_rescale_divide = 1,fig_size = (8,6)):
     logfiles = []
     for t in tmp:
         root, exe = os.path.splitext(t)
-        if exe == ".trainlog":
-            logfiles.append(t)
+        if mode == 0:
+            if exe == ".trainlog":
+                logfiles.append(t)
+        elif mode == 1:
+            if exe == ".csv":
+                logfiles.append(t)
 
     if len(logfiles) == 0:
         logger.error("No log files.")
@@ -41,34 +46,44 @@ def genGraph(log_dir, x_interval_rescale_divide = 1,fig_size = (8,6)):
     #f2 = open("C:/work/PycharmProjects/gradient_slide_cnn/model/2016090901_1000/log","r")
 
     for logfile in logfiles: # for training accuracy
-        f = open(logfile, "r")
-        try:
-            line = f.readline()
-        except:
-            logger.error("can't read line")
-            return
+        if mode == 0:
+            f = open(logfile, "r")
+            try:
+                line = f.readline()
+            except:
+                logger.error("can't read line")
+                return
 
-        while(line):
-            start = line.find(":")
-            if start != -1:
-                start += 1
-                end = line.find(",")
-                if end == -1:
-                    value = float(line[start:])
-                else:
-                    value = float(line[start:end])
-                if line.find("\"main/accuracy\"") > -1:
-                    train_acc.append(value)
-                elif line.find("\"validation/main/accuracy\"") > -1:
-                    valid_acc.append(value)
-                elif line.find("\"main/loss\"") > -1:
-                    train_loss.append(value)
-                elif line.find("\"validation/main/loss\"") > -1:
-                    valid_loss.append(value)
-            line = f.readline()
+            while(line):
+                start = line.find(":")
+                if start != -1:
+                    start += 1
+                    end = line.find(",")
+                    if end == -1:
+                        value = float(line[start:])
+                    else:
+                        value = float(line[start:end])
+                    if line.find("\"main/accuracy\"") > -1:
+                        train_acc.append(value)
+                    elif line.find("\"validation/main/accuracy\"") > -1:
+                        valid_acc.append(value)
+                    elif line.find("\"main/loss\"") > -1:
+                        train_loss.append(value)
+                    elif line.find("\"validation/main/loss\"") > -1:
+                        valid_loss.append(value)
+                line = f.readline()
+        elif mode == 1:
+            with open(logfile, 'r') as f:
+                reader = csv.reader(f)
+                header = next(reader)
+                for epoch in reader:
+                    train_loss.append(epoch[0])
+                    train_acc.append(epoch[1])
+                    valid_loss.append(epoch[2])
+                    valid_acc.append(epoch[3])
 
     #leveling by Savitzky-Golay filter
-    if False:
+    if True:
         train_acc = signal.savgol_filter(np.array(train_acc), 51, 3)
         valid_acc = signal.savgol_filter(np.array(valid_acc), 51, 3)
         train_loss = signal.savgol_filter(np.array(train_loss), 51, 3)
@@ -104,7 +119,7 @@ def genGraph(log_dir, x_interval_rescale_divide = 1,fig_size = (8,6)):
     logger.debug("Graph was generated succesfully.")
 
 if __name__ == "__main__":
-    log_dir = "C:/work/sHDNN/model/vd_bg350_rot_noBING_Adam_dropout2_whole/trainlog"
+    log_dir = "C:/work/sHDNN/model/tsubame/vd_bg350_rot_noBING_Adam_batchnorm_Henormal_whole/trainlog"
 
     logger = logging.getLogger(__name__)
     s_handler = logging.StreamHandler()
@@ -114,5 +129,5 @@ if __name__ == "__main__":
     logger.addHandler(s_handler)
     #logger.addHandler(f_handler)
 
-    genGraph(log_dir,x_interval_rescale_divide=7,fig_size=(20,6))
+    genGraph(log_dir,x_interval_rescale_divide=1,fig_size=(20,6),mode = 1)
 
