@@ -97,6 +97,7 @@ def load_datapaths(data_dir,data_name_prefix = "data", val_name_prefix = "val"):
 
 def dl_drain_curriculum(model_dir, data_dir, batch_learn, batch_check, epoch, snapshot_interval, from_scratch, dl_model_scratch,
                         optimizer_scratch, gpu_use = True, traindata_ratio=0.9,trainlog_dir = "trainlog",meanimg_name = "mean_image.npy",
+                        max_check_batchsize = 1000,
                         *,logger = None):
     # gpu_use = True
     # epoch = 200
@@ -197,14 +198,29 @@ def dl_drain_curriculum(model_dir, data_dir, batch_learn, batch_check, epoch, sn
                 #check loss value and select traindata
                     data_check = data_train[indexes[j*batch_check:(j+1)*batch_check if j < max_iter_train-1 else None]]
                     val_check = val_train[indexes[j*batch_check:(j+1)*batch_check if j < max_iter_train-1 else None]]
-                    if gpu_use:
-                        data_check = cuda.to_gpu(data_check)
-                    data_check_v = Variable(data_check)
-                    model.predictor.train = False
-                    result_check = F.softmax(model.predictor(data_check_v).data).data
-                    if gpu_use:
-                        result_check = cuda.to_cpu(result_check)
-                        data_check = cuda.to_cpu(data_check)
+                    check_iter = math.ceil(len(val_check) / max_check_batchsize)
+                    for k in range(check_iter):
+                        data_check_batch = data_check[k*max_check_batchsize:(k+1)*max_check_batchsize if k < check_iter-1 else None]
+                        #val_check_batch = val_check[k*max_check_batchsize:(k+1)*max_check_batchsize if k < check_iter-1 else None]
+                        if gpu_use:
+                            data_check_batch = cuda.to_gpu(data_check_batch)
+                        data_check_batch_v = Variable(data_check_batch)
+                        model.predictor.train = False
+                        if k == 0:
+                            result_check = F.softmax(model.predictor(data_check_batch_v).data).data
+                            if gpu_use: result_check = cuda.to_cpu(result_check)
+                        else:
+                            _result_check = F.softmax(model.predictor(data_check_batch_v).data).data
+                            if gpu_use: _result_check = cuda.to_cpu(_result_check)
+                            result_check = np.concatenate((result_check, _result_check), axis=0)
+                    # if gpu_use:
+                    #     data_check = cuda.to_gpu(data_check)
+                    # data_check_v = Variable(data_check)
+                    # model.predictor.train = False
+                    # result_check = F.softmax(model.predictor(data_check_v).data).data
+                    # if gpu_use:
+                    #     result_check = cuda.to_cpu(result_check)
+                    #     data_check = cuda.to_cpu(data_check)
                     indexes_toploss = np.argsort(result_check[np.arange(len(result_check)),val_check])
                     data_train_batch = data_check[indexes_toploss[0:batch_learn]]
                     val_train_batch = val_check[indexes_toploss[0:batch_learn]]
@@ -281,11 +297,11 @@ if __name__ == "__main__":
     # data, val = load_datapaths("data/vd_bg35_rot_noBING_0.5m")
     # print(data)
 
-    from_scratch = True
+    from_scratch = False
     gpu_use = True
     epoch = 10
     batch_learn = 100
-    batch_check = 1000
+    batch_check = 10000
     traindata_ratio = 0.9
     snapshot_interval = 2
 
