@@ -274,6 +274,7 @@ def dl_drain_curriculum(model_dir, data_dir, batch_learn, batch_check, epoch, sn
     if gpu_use: model.to_cpu()
     dl_model_save(model, optimizer, model_dir)
     print("dl model saved to: %s" % model_dir)
+    np.save(os.path.join(model_dir, meanimg_name), mean_image)
 
 if __name__ == "__main__":
     # data, val = load_datapaths("data/vd_bg35_rot_noBING_0.5m")
