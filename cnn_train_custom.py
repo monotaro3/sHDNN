@@ -96,7 +96,8 @@ def load_datapaths(data_dir,data_name_prefix = "data", val_name_prefix = "val"):
         return data_paths, val_paths
 
 def dl_drain_curriculum(model_dir, model_savedir_relative, data_dir, batch_learn, batch_check, epoch, snapshot_interval, from_scratch, dl_model_scratch,
-                        optimizer_scratch, gpu_use = True, traindata_ratio=0.9,trainlog_dir = "trainlog",meanimg_name = "mean_image.npy",
+                        optimizer_scratch, gpu_use = True, traindata_ratio=0.9,trainlog_dir_r = "trainlog",snapshot_dir_r = "snapshot",
+                        meanimg_name = "mean_image.npy",
                         max_check_batchsize = 1000,
                         *,logger = None):
     # gpu_use = True
@@ -129,6 +130,11 @@ def dl_drain_curriculum(model_dir, model_savedir_relative, data_dir, batch_learn
     else:
         model_savedir = model_dir
 
+    trainlog_dir = os.path.join(model_savedir, trainlog_dir_r)
+    if not os.path.isdir(trainlog_dir): os.makedirs(trainlog_dir)
+    snapshot_dir = os.path.join(model_savedir, snapshot_dir_r)
+    if not os.path.isdir(snapshot_dir): os.makedirs(snapshot_dir)
+
     if gpu_use:
         model.to_gpu()#cuda.to_gpu(model)
         #cuda.to_gpu(optimizer)
@@ -139,8 +145,7 @@ def dl_drain_curriculum(model_dir, model_savedir_relative, data_dir, batch_learn
     startdate = date.strftime('%Y/%m/%d %H:%M:%S')
     f_startdate = date.strftime('%Y%m%d_%H%M%S')
     exec_time = time.time()
-    csvfile = os.path.join(model_dir, trainlog_dir, "trainlog" + f_startdate + ".csv")
-    if not os.path.isdir(os.path.join(model_dir,trainlog_dir)): os.makedirs(os.path.join(model_dir,trainlog_dir))
+    csvfile = os.path.join(trainlog_dir, "trainlog" + f_startdate + ".csv")
 
     with open(csvfile, 'a') as f:
         writer = csv.writer(f, lineterminator="\n")
@@ -278,7 +283,7 @@ def dl_drain_curriculum(model_dir, model_savedir_relative, data_dir, batch_learn
         if snapshot_interval != 0:
             if (e + 1) % snapshot_interval == 0:
                 if gpu_use: model.to_cpu()
-                dl_model_save(model,optimizer,model_savedir,snapshot=e+1)
+                dl_model_save(model,optimizer,snapshot_dir,snapshot=e+1)
                 print("snapshot saved")
                 if gpu_use: model.to_gpu()
 
