@@ -273,6 +273,7 @@ def dl_drain_curriculum(model_dir, data_dir, batch_learn, batch_check, epoch, sn
     logger.debug("exex time:%f (%s)", exec_time, time_str)
     if gpu_use: model.to_cpu()
     dl_model_save(model, optimizer, model_dir)
+    np.save(os.path.join(model_dir,meanimg_name),mean_image)
     print("dl model saved to: %s" % model_dir)
 
 if __name__ == "__main__":
