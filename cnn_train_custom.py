@@ -95,7 +95,7 @@ def load_datapaths(data_dir,data_name_prefix = "data", val_name_prefix = "val"):
     else:
         return data_paths, val_paths
 
-def dl_drain_curriculum(model_dir, data_dir, batch_learn, batch_check, epoch, snapshot_interval, from_scratch, dl_model_scratch,
+def dl_drain_curriculum(model_dir, model_savedir_relative, data_dir, batch_learn, batch_check, epoch, snapshot_interval, from_scratch, dl_model_scratch,
                         optimizer_scratch, gpu_use = True, traindata_ratio=0.9,trainlog_dir = "trainlog",meanimg_name = "mean_image.npy",
                         max_check_batchsize = 1000,
                         *,logger = None):
@@ -122,6 +122,11 @@ def dl_drain_curriculum(model_dir, data_dir, batch_learn, batch_check, epoch, sn
     if data_paths == 0: return -1
 
     meanimg_path = os.path.join(data_dir,meanimg_name)
+
+    if model_savedir_relative != "":
+        model_savedir = os.path.join(model_dir,model_savedir_relative)
+    else:
+        model_savedir = model_dir
 
     if gpu_use:
         model.to_gpu()#cuda.to_gpu(model)
@@ -272,7 +277,7 @@ def dl_drain_curriculum(model_dir, data_dir, batch_learn, batch_check, epoch, sn
         if snapshot_interval != 0:
             if (e + 1) % snapshot_interval == 0:
                 if gpu_use: model.to_cpu()
-                dl_model_save(model,optimizer,model_dir,snapshot=e+1)
+                dl_model_save(model,optimizer,model_savedir,snapshot=e+1)
                 print("snapshot saved")
                 if gpu_use: model.to_gpu()
 
@@ -288,10 +293,9 @@ def dl_drain_curriculum(model_dir, data_dir, batch_learn, batch_check, epoch, sn
     time_str = gen_dms_time_str(exec_time)
     logger.debug("exex time:%f (%s)", exec_time, time_str)
     if gpu_use: model.to_cpu()
-    dl_model_save(model, optimizer, model_dir)
-    np.save(os.path.join(model_dir,meanimg_name),mean_image)
-    print("dl model saved to: %s" % model_dir)
-    np.save(os.path.join(model_dir, meanimg_name), mean_image)
+    dl_model_save(model, optimizer, model_savedir)
+    print("dl model saved to: %s" % model_savedir)
+    np.save(os.path.join(model_savedir, meanimg_name), mean_image)
 
 if __name__ == "__main__":
     # data, val = load_datapaths("data/vd_bg35_rot_noBING_0.5m")
@@ -307,6 +311,8 @@ if __name__ == "__main__":
 
     model_dir = "model/vd_bg350_rot_noBING_Adam_batchnorm_Henomal_whole_test"
     data_dir = "data/vd_bg35_rot_noBING_0.5m"
+    model_savedir_relative = ""
+
 
     if (batch_learn > batch_check):
         print("Batchsize setting error.")
@@ -333,7 +339,7 @@ if __name__ == "__main__":
     logger.addHandler(s_handler)
     logger.addHandler(f_handler)
 
-    dl_drain_curriculum(model_dir, data_dir, batch_learn, batch_check, epoch, snapshot_interval, from_scratch, dl_model_scratch,
+    dl_drain_curriculum(model_dir, model_savedir_relative, data_dir, batch_learn, batch_check, epoch, snapshot_interval, from_scratch, dl_model_scratch,
                         optimizer_scratch, logger=logger)
 
 
