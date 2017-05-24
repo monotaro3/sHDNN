@@ -10,6 +10,13 @@ from scipy import signal
 import csv
 
 def genGraph(log_dir, x_interval_rescale_divide = 1,fig_size = (8,6), mode = 0):
+
+    smoothing = True
+
+    range_limit = False
+    limit_acc = [0.990,1]
+    limit_loss = [0,0.12]
+
     logger = logging.getLogger("__main__." + __name__)
 
     tmp = os.listdir(log_dir)
@@ -35,12 +42,16 @@ def genGraph(log_dir, x_interval_rescale_divide = 1,fig_size = (8,6), mode = 0):
 
     acc_fig_name = "accuracy.png"
     loss_fig_name = "loss.png"
+    acc_fig_name_smoothed = "accuracy_smoothed.png"
+    loss_fig_name_smoothed = "loss_smoothed.png"
 
     graph_dir = os.path.join(log_dir, "graph")
     if not os.path.isdir(graph_dir): os.makedirs(graph_dir)
 
     acc_fig_path = os.path.join(graph_dir, acc_fig_name)
     loss_fig_path = os.path.join(graph_dir, loss_fig_name)
+    acc_fig_path_smoothed = os.path.join(graph_dir, acc_fig_name_smoothed)
+    loss_fig_path_smoothed = os.path.join(graph_dir, loss_fig_name_smoothed)
 
     #f = open("C:/work/PycharmProjects/gradient_slide_cnn/model/2016100717_35t_1000/log","r")
     #f2 = open("C:/work/PycharmProjects/gradient_slide_cnn/model/2016090901_1000/log","r")
@@ -83,11 +94,11 @@ def genGraph(log_dir, x_interval_rescale_divide = 1,fig_size = (8,6), mode = 0):
                     valid_acc.append(epoch[3])
 
     #leveling by Savitzky-Golay filter
-    if True:
-        train_acc = signal.savgol_filter(np.array(train_acc), 51, 3)
-        valid_acc = signal.savgol_filter(np.array(valid_acc), 51, 3)
-        train_loss = signal.savgol_filter(np.array(train_loss), 51, 3)
-        valid_loss = signal.savgol_filter(np.array(valid_loss), 51, 3)
+    if smoothing:
+        train_acc_smoothed = signal.savgol_filter(np.array(train_acc), 51, 3)
+        valid_acc_smoothed = signal.savgol_filter(np.array(valid_acc), 51, 3)
+        train_loss_smoothed = signal.savgol_filter(np.array(train_loss), 51, 3)
+        valid_loss_smoothed = signal.savgol_filter(np.array(valid_loss), 51, 3)
 
     x_values =[]
     for i in range(len(train_acc)):
@@ -97,7 +108,7 @@ def genGraph(log_dir, x_interval_rescale_divide = 1,fig_size = (8,6), mode = 0):
     plt.title("Training / Validation Accuracy")
     plt.ylabel("Accuracy")
     plt.xlabel("epoch")
-    #plt.ylim([0.995,1])
+    if range_limit: plt.ylim(limit_acc)
     plt.plot(x_values,train_acc, label="Training")
     plt.plot(x_values,valid_acc, label="Validation")
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
@@ -109,17 +120,41 @@ def genGraph(log_dir, x_interval_rescale_divide = 1,fig_size = (8,6), mode = 0):
     plt.title("Training / Validation Loss")
     plt.ylabel("Loss")
     plt.xlabel("epoch")
-    #plt.ylim([0,0.02])
+    if range_limit: plt.ylim(limit_loss)
     plt.plot(x_values, train_loss, label="Training")
     plt.plot(x_values, valid_loss, label="Validation")
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.subplots_adjust(right=0.7)
     plt.savefig(loss_fig_path)
 
+    if smoothing:
+        plt.figure(figsize=fig_size)
+        plt.title("Training / Validation Accuracy")
+        plt.ylabel("Accuracy")
+        plt.xlabel("epoch")
+        if range_limit: plt.ylim(limit_acc)
+        plt.plot(x_values, train_acc_smoothed, label="Training")
+        plt.plot(x_values, valid_acc_smoothed, label="Validation")
+        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.subplots_adjust(right=0.7)
+        plt.savefig(acc_fig_path_smoothed)
+        # plt.show()
+
+        plt.figure(figsize=fig_size)
+        plt.title("Training / Validation Loss")
+        plt.ylabel("Loss")
+        plt.xlabel("epoch")
+        if range_limit: plt.ylim(limit_loss)
+        plt.plot(x_values, train_loss_smoothed, label="Training")
+        plt.plot(x_values, valid_loss_smoothed, label="Validation")
+        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.subplots_adjust(right=0.7)
+        plt.savefig(loss_fig_path_smoothed)
+
     logger.debug("Graph was generated succesfully.")
 
 if __name__ == "__main__":
-    log_dir = "C:/work/sHDNN/model/tsubame/vd_bg350_rot_noBING_Adam_batchnorm_Henormal_whole/trainlog"
+    log_dir = "C:/work/sHDNN/model/HEM_test/test1_old_n/trainlog"
 
     logger = logging.getLogger(__name__)
     s_handler = logging.StreamHandler()
