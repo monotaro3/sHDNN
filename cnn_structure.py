@@ -159,3 +159,47 @@ class CNN_batchnorm_Henormal(Chain):
         #h4 = F.dropout(self.fc1(h3),ratio=0.5,train=self.train)
         y = self.fc2(h3)
         return y
+
+class CNN_batchnorm_fixed(Chain):
+    def __init__(self,train=True):
+        super(CNN_batchnorm_fixed, self).__init__(
+            conv1=L.Convolution2D(3, 20, 7),
+            norm1=L.BatchNormalization(20),
+            conv2=L.Convolution2D(20, 8, 4),
+            norm2=L.BatchNormalization(8),
+            conv3=L.Convolution2D(8, 8, 4),
+            norm3=L.BatchNormalization(8),
+            fc1=L.Linear(72,72),
+            fc2=L.Linear(72, 2)
+        )
+        self.train = train
+
+    def __call__(self, x):
+        h1 = F.max_pooling_2d(F.relu(self.norm1(self.conv1(x),test=not(self.train))), 2, 2)
+        h2 = F.max_pooling_2d(F.relu(self.norm2(self.conv2(h1),test=not(self.train))), 2, 2)
+        h3 = F.max_pooling_2d(F.relu(self.norm3(self.conv3(h2),test=not(self.train))), 2, 2)
+        #h4 = F.dropout(self.fc1(h3),ratio=0.5,train=self.train)
+        y = self.fc2(h3)
+        return y
+
+class CNN_batchnorm_fixed_ft(Chain):
+    def __init__(self,train=True):
+        super(CNN_batchnorm_fixed_ft, self).__init__(
+            conv1=L.Convolution2D(3, 20, 7),
+            norm1=L.BatchNormalization(20),
+            conv2=L.Convolution2D(20, 8, 4),
+            norm2=L.BatchNormalization(8),
+            conv3=L.Convolution2D(8, 8, 4),
+            norm3=L.BatchNormalization(8),
+            fc1=L.Linear(72,72),
+            fc2=L.Linear(72, 2)
+        )
+        self.train = train
+
+    def __call__(self, x):
+        h1 = F.max_pooling_2d(F.relu(self.norm1(self.conv1(x),test=not(self.train),finetune=self.train)), 2, 2)
+        h2 = F.max_pooling_2d(F.relu(self.norm2(self.conv2(h1),test=not(self.train),finetune=self.train)), 2, 2)
+        h3 = F.max_pooling_2d(F.relu(self.norm3(self.conv3(h2),test=not(self.train),finetune=self.train)), 2, 2)
+        #h4 = F.dropout(self.fc1(h3),ratio=0.5,train=self.train)
+        y = self.fc2(h3)
+        return y
