@@ -47,8 +47,18 @@ def dl_model_load(model_dir, model_name = "gradient_cnn.npz", optimizer_name = "
         class_def = getattr(mod, cnn_classname)
         cnn_architecture = class_def()
 
+        optname_file = root + "_optname.txt"
+        try:
+            f = open(optname_file, "r")
+            opt_classname = f.readline()
+        except:
+            opt_classname = "Adam"
+        class_def = getattr(optimizers, opt_classname)
+        optimizer_loaded = class_def()
+
         model = L.Classifier(cnn_architecture)
-        optimizer = optimizers.SGD()
+        optimizer = optimizer_loaded
+        optimizer.use_cleargrads()
         serializers.load_npz(model_path, model)
         optimizer.setup(model)
         serializers.load_npz(optimizer_path, optimizer)
@@ -70,8 +80,12 @@ def dl_model_save(model,optimizer,model_dir,model_name = "gradient_cnn.npz", opt
     if snapshot == None:
         root, exe = os.path.splitext(model_path)
         modelname_file = root + "_modelname.txt"
+        optname_file = root + "_optname.txt"
         f = open(modelname_file, "w")
         f.write(model.predictor.__class__.__name__)
+        f.close()
+        f = open(optname_file, "w")
+        f.write(optimizer.__class__.__name__)
         f.close()
 
 def load_datapaths(data_dir,data_name_prefix = "data", val_name_prefix = "val"):
@@ -96,7 +110,7 @@ def load_datapaths(data_dir,data_name_prefix = "data", val_name_prefix = "val"):
         return data_paths, val_paths
 
 def dl_drain_curriculum(model_dir, model_savedir_relative, data_dir, batch_learn, batch_check, epoch, snapshot_interval, from_scratch, dl_model_scratch,
-                        optimizer_scratch, gpu_use = True, traindata_ratio=0.9,trainlog_dir_r = "trainlog",snapshot_dir_r = "snapshot",
+                        optimizer_scratch, mode, gpu_use = True, traindata_ratio=0.9,trainlog_dir_r = "trainlog",snapshot_dir_r = "snapshot",
                         meanimg_name = "mean_image.npy",
                         max_check_batchsize = 1000,
                         *,logger = None):
@@ -113,6 +127,7 @@ def dl_drain_curriculum(model_dir, model_savedir_relative, data_dir, batch_learn
         model = L.Classifier(dl_model_scratch)
         optimizer = optimizer_scratch
         optimizer.setup(model)
+        #optimizer.setup(model.predictor)
     else:
         model,optimizer = dl_model_load(model_dir)
         if model == None:
@@ -196,57 +211,109 @@ def dl_drain_curriculum(model_dir, model_savedir_relative, data_dir, batch_learn
             data_train, data_valid = np.split(data,[N])
             val_train, val_valid = np.split(val,[N])
             indexes = np.random.permutation(len(val_train))
+            #indexes = np.arange(len(val_train))  # for debug
             max_iter_train = math.ceil(len(val_train)/batch_check)
             max_iter_validation = math.ceil(len(val_valid)/batch_learn)
-            #training
-            for j in range(max_iter_train):
-                if batch_check == batch_learn:
-                    data_train_batch = data_train[
-                        indexes[j * batch_learn:(j + 1) * batch_learn if j < max_iter_train - 1 else None]]
-                    val_train_batch = val_train[
-                        indexes[j * batch_learn:(j + 1) * batch_learn if j < max_iter_train - 1 else None]]
-                else:
-                #check loss value and select traindata
-                    data_check = data_train[indexes[j*batch_check:(j+1)*batch_check if j < max_iter_train-1 else None]]
-                    val_check = val_train[indexes[j*batch_check:(j+1)*batch_check if j < max_iter_train-1 else None]]
-                    check_iter = math.ceil(len(val_check) / max_check_batchsize)
-                    for k in range(check_iter):
-                        data_check_batch = data_check[k*max_check_batchsize:(k+1)*max_check_batchsize if k < check_iter-1 else None]
-                        #val_check_batch = val_check[k*max_check_batchsize:(k+1)*max_check_batchsize if k < check_iter-1 else None]
-                        if gpu_use:
-                            data_check_batch = cuda.to_gpu(data_check_batch)
-                        data_check_batch_v = Variable(data_check_batch)
-                        model.predictor.train = False
-                        if k == 0:
-                            result_check = F.softmax(model.predictor(data_check_batch_v).data).data
-                            if gpu_use: result_check = cuda.to_cpu(result_check)
-                        else:
-                            _result_check = F.softmax(model.predictor(data_check_batch_v).data).data
-                            if gpu_use: _result_check = cuda.to_cpu(_result_check)
-                            result_check = np.concatenate((result_check, _result_check), axis=0)
-                    # if gpu_use:
-                    #     data_check = cuda.to_gpu(data_check)
-                    # data_check_v = Variable(data_check)
-                    # model.predictor.train = False
-                    # result_check = F.softmax(model.predictor(data_check_v).data).data
-                    # if gpu_use:
-                    #     result_check = cuda.to_cpu(result_check)
-                    #     data_check = cuda.to_cpu(data_check)
-                    indexes_toploss = np.argsort(result_check[np.arange(len(result_check)),val_check])
-                    data_train_batch = data_check[indexes_toploss[0:batch_learn]]
-                    val_train_batch = val_check[indexes_toploss[0:batch_learn]]
+            if mode == 0:
+                #training
+                for j in range(max_iter_train):
+                    if batch_check == batch_learn:
+                        data_train_batch = data_train[
+                            indexes[j * batch_learn:(j + 1) * batch_learn if j < max_iter_train - 1 else None]]
+                        val_train_batch = val_train[
+                            indexes[j * batch_learn:(j + 1) * batch_learn if j < max_iter_train - 1 else None]]
+                    else:
+                    #check loss value and select traindata
+                        data_check = data_train[indexes[j*batch_check:(j+1)*batch_check if j < max_iter_train-1 else None]]
+                        val_check = val_train[indexes[j*batch_check:(j+1)*batch_check if j < max_iter_train-1 else None]]
+                        check_iter = math.ceil(len(val_check) / max_check_batchsize)
+                        for k in range(check_iter):
+                            data_check_batch = data_check[k*max_check_batchsize:(k+1)*max_check_batchsize if k < check_iter-1 else None]
+                            #val_check_batch = val_check[k*max_check_batchsize:(k+1)*max_check_batchsize if k < check_iter-1 else None]
+                            if gpu_use:
+                                data_check_batch = cuda.to_gpu(data_check_batch)
+                            data_check_batch_v = Variable(data_check_batch)
+                            data_check_batch_v.volatile = True
+                            model.predictor.train = False
+                            if k == 0:
+                                result_check = F.softmax(model.predictor(data_check_batch_v).data).data
+                                if gpu_use: result_check = cuda.to_cpu(result_check)
+                            else:
+                                _result_check = F.softmax(model.predictor(data_check_batch_v).data).data
+                                if gpu_use: _result_check = cuda.to_cpu(_result_check)
+                                result_check = np.concatenate((result_check, _result_check), axis=0)
+                        # if gpu_use:
+                        #     data_check = cuda.to_gpu(data_check)
+                        # data_check_v = Variable(data_check)
+                        # model.predictor.train = False
+                        # result_check = F.softmax(model.predictor(data_check_v).data).data
+                        # if gpu_use:
+                        #     result_check = cuda.to_cpu(result_check)
+                        #     data_check = cuda.to_cpu(data_check)
+                        indexes_toploss = np.argsort(result_check[np.arange(len(result_check)),val_check])
+                        data_train_batch = data_check[indexes_toploss[0:batch_learn]]
+                        val_train_batch = val_check[indexes_toploss[0:batch_learn]]
+                    #train
+                    if gpu_use:
+                        data_train_batch = cuda.to_gpu(data_train_batch)
+                        val_train_batch = cuda.to_gpu(val_train_batch)
+                    data_train_batch = Variable(data_train_batch)
+                    val_train_batch = Variable(val_train_batch)
+                    #model.cleargrads()
+                    model.predictor.train = True
+                    optimizer.update(model,data_train_batch,val_train_batch)
+                    loss_batch = model.loss
+                    accuracy_batch = model.accuracy
+                    loss_train += loss_batch.data
+                    accuracy_train += accuracy_batch.data
+
+                    # import chainer.computational_graph as c
+                    # g = c.build_computational_graph((loss_batch,),
+                    #                                 remove_split=True)  # <-- パラメタの書き方がマニュアルと違うが、これでないと動かない感じ。
+                    # with open('./graph2.dot', 'w') as o:
+                    #     o.write(g.dump())
+
+            elif mode == 1:
+                # check and choose train data
+                max_check_iter = math.ceil(len(val_train)/max_check_batchsize)
+                model.predictor.train = False
+                for j in range(max_check_iter):
+                    data_check = data_train[
+                        j * max_check_batchsize:(j + 1) * max_check_batchsize if j < max_check_iter - 1 else None]
+                    if gpu_use: data_check = cuda.to_gpu(data_check)
+                    data_check_v = Variable(data_check)
+                    if j == 0:
+                        result_check = F.softmax(model.predictor(data_check_v).data).data
+                        if gpu_use: result_check = cuda.to_cpu(result_check)
+                    else:
+                        _result_check = F.softmax(model.predictor(data_check_v).data).data
+                        if gpu_use: _result_check = cuda.to_cpu(_result_check)
+                        result_check = np.concatenate((result_check, _result_check), axis=0)
+                indexes_toploss = np.argsort(result_check[np.arange(len(result_check)), val_train])
+                indexes_for_train = indexes_toploss[0:int(len(val_train)*(batch_learn/batch_check))]
                 #train
-                if gpu_use:
-                    data_train_batch = cuda.to_gpu(data_train_batch)
-                    val_train_batch = cuda.to_gpu(val_train_batch)
-                data_train_batch = Variable(data_train_batch)
-                val_train_batch = Variable(val_train_batch)
+                max_train_iter = math.ceil(len(indexes_for_train)/batch_learn)
                 model.predictor.train = True
-                optimizer.update(model,data_train_batch,val_train_batch)
-                loss_batch = model.loss
-                accuracy_batch = model.accuracy
-                loss_train += loss_batch.data
-                accuracy_train += accuracy_batch.data
+                indexes_chosen = np.random.permutation(len(indexes_for_train))
+                for j in range(max_train_iter):
+                    data_train_batch = data_train[indexes_for_train[indexes_chosen[j * batch_learn:(j + 1) * batch_learn if j < max_train_iter - 1 else None]]]
+                    val_train_batch = val_train[indexes_for_train[indexes_chosen[j * batch_learn:(j + 1) * batch_learn if j < max_train_iter - 1 else None]]]
+                    if gpu_use:
+                        data_train_batch = cuda.to_gpu(data_train_batch)
+                        val_train_batch = cuda.to_gpu(val_train_batch)
+                    data_train_batch = Variable(data_train_batch)
+                    val_train_batch = Variable(val_train_batch)
+                    #optimizer.update(model, data_train_batch, val_train_batch)
+                    model.cleargrads()
+                    loss = model(data_train_batch,val_train_batch)
+                    loss.backward()
+                    optimizer.update()
+
+                    loss_batch = model.loss
+                    accuracy_batch = model.accuracy
+                    loss_train += loss_batch.data
+                    accuracy_train += accuracy_batch.data
+
             #validation
             for j in range(max_iter_validation):
                 data_valid_batch = data_valid[j*batch_learn:(j+1)*batch_learn if j < max_iter_validation-1 else None]
@@ -307,18 +374,23 @@ if __name__ == "__main__":
     # data, val = load_datapaths("data/vd_bg35_rot_noBING_0.5m")
     # print(data)
 
-    from_scratch = False
+    from_scratch = True
     gpu_use = True
-    epoch = 200
+    epoch = 10
     batch_learn = 100
-    batch_check = 10000
+    batch_check = 100
     traindata_ratio = 0.9
-    snapshot_interval = 2
+    snapshot_interval = 10
 
-    model_dir = "model/vd_bg350_rot_noBING_Adam_batchnorm_Henomal_whole_test/test"
+    model_dir = "model/HEM_test/test1_old_n"
     data_dir = "data/vd_bg35_rot_noBING_0.5m"
     model_savedir_relative = ""
 
+    process_mode = 0 #0: check for each iteration, 1: for each epoch
+
+    dl_model_scratch = cnn_structure.CNN_batchnorm_fixed()
+    optimizer_scratch = optimizers.Adam()
+    optimizer_scratch.use_cleargrads()
 
     if (batch_learn > batch_check):
         print("Batchsize setting error.")
@@ -330,11 +402,10 @@ if __name__ == "__main__":
             print("No model dir to load.")
             exit(0)
 
-    logfile_name = "cnn_train_curricurum.log"
-    logfile_path = os.path.join(model_dir, logfile_name)
+    model_savedir = os.path.join(model_dir,model_savedir_relative) if model_savedir_relative != "" else model_dir
 
-    dl_model_scratch = cnn_structure.CNN_batchnorm_Henormal()
-    optimizer_scratch = optimizers.Adam()
+    logfile_name = "cnn_train_curricurum.log"
+    logfile_path = os.path.join(model_savedir, logfile_name)
 
     logger = logging.getLogger(__name__)
     s_handler = logging.StreamHandler()
@@ -346,7 +417,7 @@ if __name__ == "__main__":
     logger.addHandler(f_handler)
 
     dl_drain_curriculum(model_dir, model_savedir_relative, data_dir, batch_learn, batch_check, epoch, snapshot_interval, from_scratch, dl_model_scratch,
-                        optimizer_scratch, logger=logger)
+                        optimizer_scratch, mode = process_mode, logger=logger)
 
 
 
