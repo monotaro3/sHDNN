@@ -143,6 +143,7 @@ class vehicle():
         self.covered = False
         self.detected = False
         self.retrieved = False
+        self.cover_windows = []
 
     def windowimg(self,img):
         img_height, img_width, channnel = img.shape
@@ -537,14 +538,14 @@ def main():
     showImage = False  # 処理後画像表示　ディレクトリ内処理の場合はオフ
     imgpath = "C:/work/vehicle_detection/images/test/kurume_yumetown.tif"  # 単一ファイル処理
     test_dir = "../vehicle_detection/images/test/" #"e:/work/yangon_satimage/test_2"
-    result_dir = "../vehicle_detection/images/test/sHDNN/cl_ex/cl/200_0.5m/" #"e:/work/yangon_satimage/test_2/2color"
-    cnn_dir = "model/cl_ex/cl/200_0.5m/1000_2nd_2/"
+    result_dir = "../vehicle_detection/images/test/sHDNN/cl_ex/cl_re" #"e:/work/yangon_satimage/test_2/2color"
+    cnn_dir = "model/cl_ex/cl_re/x400_500_4"
     cnn_classifier = "gradient_cnn.npz"
     cnn_optimizer = "gradient_optimizer.npz"
     mean_image_dir = ""
     mean_image_file = "mean_image.npy"
     logfile_name = "gradient_cnn.log"
-    windowsize_default = 18 #18,35
+    windowsize_default = 35 #18,35
     gpuEnable = 1  # 1:有効化
     batchsize = 100
     efactor = 1.414
@@ -814,6 +815,7 @@ def main():
                     if len(cover_GTs) > 0: i.bVcover = True
                     for j in cover_GTs:
                         j[0].covered = True #simplified coverage calculation
+                        j[0].cover_windows.append(i)
                     for j in cover_GTs:
                         if not j[0].retrieved:
                             j[0].retrieved = True
@@ -979,7 +981,7 @@ def main():
             PR = n_detected_vehicles/detectobjects if detectobjects != 0 else None
             RR = n_detected_vehicles/nGT if nGT != 0 else None
             Accuracy = (TP + TN) / (TP + TN + FP + FN)
-            F_measure = 2 * PR * RR / (PR + RR)
+            F_measure = 2 * PR * RR / (PR + RR) if PR != None and RR != None and PR + RR != 0 else 0
             results_stat.append([imgpath,nGT,DR,FAR,PR,RR,TP,FP,FN,TN,Accuracy,F_measure,AP])
             overAcc += Accuracy
 
@@ -1038,7 +1040,7 @@ def main():
             plt.savefig(AC_fig_path)
 
         #generate result visualization output for evaluation
-        if Output_For_Debug and (not TestOnly) and analyze_mode == 1:
+        if Output_For_Debug and (not TestOnly):
             debug_file_path = os.path.join(result_dir,"debug")
             if not os.path.isdir(debug_file_path):
                 os.makedirs(debug_file_path)
@@ -1095,13 +1097,20 @@ def main():
             targetFN_num = 0
             for i in gt_vehicles:
                 if i.detected == False:
-                    targetFN_num += len([x for x in i.connections if x.obj2.result == 0])
+                    if analyze_mode == 0:
+                        targetFN_num += len([x for x in i.cover_windows if x.result==0])
+                    elif analyze_mode == 1:
+                        targetFN_num += len([x for x in i.connections if x.obj2.result == 0])
             tile_rows = math.ceil(targetFN_num / tile_columns)
             eval_img = np.zeros((tile_rows * slidewindowsize, tile_columns * slidewindowsize, 3), np.uint8)
             write_pointer = [0, 0]  # opencv coordinate
             for i in gt_vehicles:
                 if i.detected == False:
-                    for j in [x.obj2 for x in i.connections if x.obj2.result == 0]:
+                    if analyze_mode == 0:
+                        FN_windows = [x for x in i.cover_windows if x.result==0]
+                    elif analyze_mode == 1:
+                        FN_windows = [x.obj2 for x in i.connections if x.obj2.result == 0]
+                    for j in FN_windows:
                         img_patch = j.windowimg(img, raw=True)
                         eval_img[write_pointer[0]:write_pointer[0] + img_patch.shape[0],
                         write_pointer[1]:write_pointer[1] + img_patch.shape[1],
@@ -1117,8 +1126,11 @@ def main():
             eval_img_width_max = tile_columns * gtwindowsize
             for i in gt_vehicles:
                 if i.detected == False:
-                    #tile_rows += math.ceil(len(filter(lambda x: x.obj2.result == 0,i.connections))/(tile_columns-2))
-                    tile_rows += math.ceil(len([x for x in i.connections if x.obj2.result == 0])/(tile_columns-2))
+                    if analyze_mode == 0:
+                        tile_rows += math.ceil(
+                            len([x for x in i.cover_windows if x.result==0]) / (tile_columns - 2))
+                    elif analyze_mode == 1:
+                        tile_rows += math.ceil(len([x for x in i.connections if x.obj2.result == 0])/(tile_columns-2))
             eval_img = np.zeros((tile_rows * gtwindowsize, tile_columns * gtwindowsize, 3), np.uint8)
             write_pointer = [0, 0]  # opencv coordinate
             for i in gt_vehicles:
@@ -1128,8 +1140,12 @@ def main():
                     write_pointer[1]:write_pointer[1] + img_patch.shape[1],
                     :] = img_patch
                     write_pointer[1] += gtwindowsize * 2
-                    FNs = [x.obj2 for x in [x for x in i.connections if x.obj2.result == 0]]
-                    for j in FNs:
+                    if analyze_mode == 0:
+                        FN_windows = [x for x in i.cover_windows if x.result==0]
+                    elif analyze_mode == 1:
+                        FN_windows = [x.obj2 for x in i.connections if x.obj2.result == 0]
+                    # FNs = [x.obj2 for x in [x for x in i.connections if x.obj2.result == 0]]
+                    for j in FN_windows:
                         img_patch = j.windowimg(img,raw=True)
                         eval_img[write_pointer[0]:write_pointer[0] + img_patch.shape[0],
                         write_pointer[1]:write_pointer[1] + img_patch.shape[1],
