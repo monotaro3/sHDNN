@@ -37,6 +37,7 @@ class slidingwindow():
         self.overlap = 0
         self.overlap_windows = []
         self.NMSuppressed = False
+        self.l_distance = None
 
         self.movetocentroid(img)
         self.x -= int((self.windowsize * efactor - self.windowsize)/2)
@@ -813,7 +814,9 @@ def main():
                                     cover_GTs.append([j,distance])
                     cover_GTs.sort(key=lambda x: x[1])
                     if len(cover_GTs) > 0: i.bVcover = True
-                    for j in cover_GTs:
+                    for index, j in enumerate(cover_GTs):
+                        if index == 0:
+                            i.l_distance = j[1]
                         j[0].covered = True #simplified coverage calculation
                         j[0].cover_windows.append(i)
                     for j in cover_GTs:
@@ -1060,6 +1063,38 @@ def main():
                     write_pointer[1] = (write_pointer[1] + slidewindowsize) % eval_img_width_max
                     if write_pointer[1] == 0: write_pointer[0] += slidewindowsize
             cv.imwrite(os.path.join(debug_file_path,root + "_sHDNN_TPpatch_visualization" + f_startdate + ".jpg"),eval_img)
+            # for TP which detected gt
+            TP_gt = [x for x in slidewindows if x.bVdetect == True and x.result == 1 and x.bVcover == True]
+            tile_rows = math.ceil(len(TP_gt) / tile_columns)
+            eval_img = np.zeros((tile_rows * slidewindowsize, tile_columns * slidewindowsize, 3), np.uint8)
+            write_pointer = [0, 0]  # opencv coordinate
+            for i in TP_gt:
+                img_patch = i.windowimg(img, raw=True)
+                eval_img[write_pointer[0]:write_pointer[0] + img_patch.shape[0],
+                write_pointer[1]:write_pointer[1] + img_patch.shape[1],
+                :] = img_patch
+                write_pointer[1] = (write_pointer[1] + slidewindowsize) % eval_img_width_max
+                if write_pointer[1] == 0: write_pointer[0] += slidewindowsize
+            cv.imwrite(
+                os.path.join(debug_file_path, root + "_sHDNN_TPpatch_detectgt_visualization" + f_startdate + ".jpg"),
+                eval_img)
+            logger.debug("(TP which detected gt) mean distance between window and gt: %f",
+                         sum([x.l_distance for x in TP_gt]) / len(TP_gt) if len(TP_gt) !=0 else -1)
+            #for repetitive TP
+            rTP = [x for x in slidewindows if x.bVdetect == False and x.result==1 and x.bVcover==True]
+            tile_rows = math.ceil(len(rTP)/ tile_columns)
+            eval_img = np.zeros((tile_rows * slidewindowsize, tile_columns * slidewindowsize, 3), np.uint8)
+            write_pointer = [0, 0]  # opencv coordinate
+            for i in rTP:
+                img_patch = i.windowimg(img, raw=True)
+                eval_img[write_pointer[0]:write_pointer[0] + img_patch.shape[0],
+                write_pointer[1]:write_pointer[1] + img_patch.shape[1],
+                :] = img_patch
+                write_pointer[1] = (write_pointer[1] + slidewindowsize) % eval_img_width_max
+                if write_pointer[1] == 0: write_pointer[0] += slidewindowsize
+            cv.imwrite(os.path.join(debug_file_path, root + "_sHDNN_repetitiveTPpatch_visualization" + f_startdate + ".jpg"),
+                       eval_img)
+            logger.debug("(repetitive TP) mean distance between window and gt: %f",sum([x.l_distance for x in rTP])/len(rTP) if len(rTP) !=0 else -1)
             #for FP
             tile_rows = math.ceil(FP / tile_columns)
             eval_img = np.zeros((tile_rows * slidewindowsize, tile_columns * slidewindowsize, 3), np.uint8)
