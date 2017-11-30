@@ -1151,13 +1151,14 @@ def main():
                     elif analyze_mode == 1:
                         targetFN_num += len([x for x in i.connections if x.obj2.result == 0])
                         draw_windows.extend([x for x in i.connections if x.obj2.result == 0])
-            if True:
+            if False:
                 n_random_sample = 100
                 targetFN_num = min(n_random_sample, targetFN_num)
                 if targetFN_num != 0:
                     indices = np.random.choice(np.arange(len(draw_windows)),targetFN_num,replace=False)
                     indices = np.sort(indices)
                     draw_windows = itemgetter(*indices)(draw_windows)
+            logger.debug("number of FN assosiated with undetected GT: {0}".format(targetFN_num))
             tile_rows = math.ceil(targetFN_num / tile_columns)
             eval_img = np.zeros((tile_rows * slidewindowsize, tile_columns * slidewindowsize, 3), np.uint8)
             write_pointer = [0, 0]  # opencv coordinate
