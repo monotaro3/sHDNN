@@ -1047,7 +1047,7 @@ def main():
             debug_file_path = os.path.join(result_dir,"debug")
             if not os.path.isdir(debug_file_path):
                 os.makedirs(debug_file_path)
-            eval_img_width_max = 500
+            eval_img_width_max = 550
             #for TP
             tile_columns = int(eval_img_width_max / slidewindowsize)
             eval_img_width_max = tile_columns * slidewindowsize
@@ -1123,10 +1123,20 @@ def main():
                        eval_img)
             #for undetected GT
             tile_columns = int(eval_img_width_max / gtwindowsize)
-            tile_rows = math.ceil(len([x for x in gt_vehicles if x.detected == False]) / tile_columns)
+            draw_gts = [x for x in gt_vehicles if x.detected == False]
+            targetGT_num = len(draw_gts)
+            if True:
+                n_random_sample = 100
+                targetGT_num = min(n_random_sample, targetGT_num)
+                if targetGT_num != 0:
+                    indices = np.random.choice(np.arange(len(draw_gts)), targetGT_num, replace=False)
+                    indices = np.sort(indices)
+                    draw_gts = itemgetter(*indices)(draw_gts)
+            logger.debug("number of visualized undetected GT : {0}".format(targetGT_num))
+            tile_rows = math.ceil(targetGT_num / tile_columns)
             eval_img = np.zeros((tile_rows * gtwindowsize, tile_columns * gtwindowsize, 3), np.uint8)
             write_pointer = [0, 0]  # opencv coordinate
-            for i in [x for x in gt_vehicles if x.detected == False]:
+            for i in draw_gts:
                 img_patch = i.windowimg(img)
                 eval_img[write_pointer[0]:write_pointer[0] + img_patch.shape[0],
                 write_pointer[1]:write_pointer[1] + img_patch.shape[1],
@@ -1158,7 +1168,7 @@ def main():
                     indices = np.random.choice(np.arange(len(draw_windows)),targetFN_num,replace=False)
                     indices = np.sort(indices)
                     draw_windows = itemgetter(*indices)(draw_windows)
-            logger.debug("number of FN assosiated with undetected GT: {0}".format(targetFN_num))
+            logger.debug("number of visualized FN assosiated with undetected GT: {0}".format(targetFN_num))
             tile_rows = math.ceil(targetFN_num / tile_columns)
             eval_img = np.zeros((tile_rows * slidewindowsize, tile_columns * slidewindowsize, 3), np.uint8)
             write_pointer = [0, 0]  # opencv coordinate
