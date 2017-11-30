@@ -250,7 +250,7 @@ def getslidewindows(img,windowsize,meshsize, slide_param,overlap_sort_reverse, s
     windows2 = None
     windows3 = None
 
-    multiprocess = 1 #マルチプロセス 1:有効化　ただしデバッグ使用不可
+    multiprocess = 0 #マルチプロセス 1:有効化　ただしデバッグ使用不可
     if multiprocess == 1:
         with futures.ProcessPoolExecutor() as executor:     #マルチプロセス処理
             mappings = {executor.submit(makeslidingwindows,n,windowsize,slide_param): n for n in values}
@@ -1047,7 +1047,7 @@ def main():
             debug_file_path = os.path.join(result_dir,"debug")
             if not os.path.isdir(debug_file_path):
                 os.makedirs(debug_file_path)
-            eval_img_width_max = 1000
+            eval_img_width_max = 500
             #for TP
             tile_columns = int(eval_img_width_max / slidewindowsize)
             eval_img_width_max = tile_columns * slidewindowsize
@@ -1096,17 +1096,29 @@ def main():
                        eval_img)
             logger.debug("(repetitive TP) mean distance between window and gt: %f",sum([x.l_distance for x in rTP])/len(rTP) if len(rTP) !=0 else -1)
             #for FP
-            tile_rows = math.ceil(FP / tile_columns)
+            from operator import itemgetter
+            draw_windows = [x for x in slidewindows if x.result == 1 and x.bVcover == False]
+            targetFP_num = len(draw_windows)
+            if True:
+                n_random_sample = 100
+                targetFP_num = min(n_random_sample, targetFP_num)
+                if targetFP_num != 0:
+                    indices = np.random.choice(np.arange(len(draw_windows)), targetFP_num, replace=False)
+                    indices = np.sort(indices)
+                    draw_windows = itemgetter(*indices)(draw_windows)
+
+            tile_rows = math.ceil(targetFP_num / tile_columns)
             eval_img = np.zeros((tile_rows * slidewindowsize, tile_columns * slidewindowsize, 3), np.uint8)
             write_pointer = [0, 0]  # opencv coordinate
-            for i in slidewindows:
-                if i.result == 1 and i.bVcover == False:
-                    img_patch = i.windowimg(img, raw=True)
-                    eval_img[write_pointer[0]:write_pointer[0] + img_patch.shape[0],
-                    write_pointer[1]:write_pointer[1] + img_patch.shape[1],
-                    :] = img_patch
-                    write_pointer[1] = (write_pointer[1] + slidewindowsize) % eval_img_width_max
-                    if write_pointer[1] == 0: write_pointer[0] += slidewindowsize
+            # for i in slidewindows:
+            #     if i.result == 1 and i.bVcover == False:
+            for i in draw_windows:
+                img_patch = i.windowimg(img, raw=True)
+                eval_img[write_pointer[0]:write_pointer[0] + img_patch.shape[0],
+                write_pointer[1]:write_pointer[1] + img_patch.shape[1],
+                :] = img_patch
+                write_pointer[1] = (write_pointer[1] + slidewindowsize) % eval_img_width_max
+                if write_pointer[1] == 0: write_pointer[0] += slidewindowsize
             cv.imwrite(os.path.join(debug_file_path, root + "_sHDNN_FPpatch_visualization" + f_startdate + ".jpg"),
                        eval_img)
             #for undetected GT
@@ -1130,28 +1142,39 @@ def main():
             #for FN assosiated with undetected GT
             tile_columns = int(eval_img_width_max / slidewindowsize)
             targetFN_num = 0
+            draw_windows = []
             for i in gt_vehicles:
                 if i.detected == False:
                     if analyze_mode == 0:
                         targetFN_num += len([x for x in i.cover_windows if x.result==0])
+                        draw_windows.extend([x for x in i.cover_windows if x.result==0])
                     elif analyze_mode == 1:
                         targetFN_num += len([x for x in i.connections if x.obj2.result == 0])
+                        draw_windows.extend([x for x in i.connections if x.obj2.result == 0])
+            if True:
+                n_random_sample = 100
+                targetFN_num = min(n_random_sample, targetFN_num)
+                if targetFN_num != 0:
+                    indices = np.random.choice(np.arange(len(draw_windows)),targetFN_num,replace=False)
+                    indices = np.sort(indices)
+                    draw_windows = itemgetter(*indices)(draw_windows)
             tile_rows = math.ceil(targetFN_num / tile_columns)
             eval_img = np.zeros((tile_rows * slidewindowsize, tile_columns * slidewindowsize, 3), np.uint8)
             write_pointer = [0, 0]  # opencv coordinate
-            for i in gt_vehicles:
-                if i.detected == False:
-                    if analyze_mode == 0:
-                        FN_windows = [x for x in i.cover_windows if x.result==0]
-                    elif analyze_mode == 1:
-                        FN_windows = [x.obj2 for x in i.connections if x.obj2.result == 0]
-                    for j in FN_windows:
-                        img_patch = j.windowimg(img, raw=True)
-                        eval_img[write_pointer[0]:write_pointer[0] + img_patch.shape[0],
-                        write_pointer[1]:write_pointer[1] + img_patch.shape[1],
-                        :] = img_patch
-                        write_pointer[1] = (write_pointer[1] + slidewindowsize) % eval_img_width_max
-                        if write_pointer[1] == 0: write_pointer[0] += slidewindowsize
+            # for i in gt_vehicles:
+            #     if i.detected == False:
+            #         if analyze_mode == 0:
+            #             FN_windows = [x for x in i.cover_windows if x.result==0]
+            #         elif analyze_mode == 1:
+            #             FN_windows = [x.obj2 for x in i.connections if x.obj2.result == 0]
+            #         for j in FN_windows:
+            for j in draw_windows:
+                img_patch = j.windowimg(img, raw=True)
+                eval_img[write_pointer[0]:write_pointer[0] + img_patch.shape[0],
+                write_pointer[1]:write_pointer[1] + img_patch.shape[1],
+                :] = img_patch
+                write_pointer[1] = (write_pointer[1] + slidewindowsize) % eval_img_width_max
+                if write_pointer[1] == 0: write_pointer[0] += slidewindowsize
             cv.imwrite(os.path.join(debug_file_path,
                                     root + "_sHDNN_FNpatch_to_undetectedGT_visualization" + f_startdate + ".jpg"),
                        eval_img)
